@@ -32,10 +32,37 @@ except Exception as e:
     st.error(f"❌ Failed to initialize AssemblyAI: {str(e)}")
     st.stop()
 
+def generate_question(client):
+    response = client.chat.completions.create(
+        model="o3-mini",
+        messages=[{
+            "role": "user",
+            "content": (
+                "Generate a single oral exam question for an undergraduate general chemistry course. "
+                "Pick a random topic from: stoichiometry, thermodynamics, chemical kinetics, equilibrium, "
+                "electrochemistry, acid-base chemistry, gas laws, periodic trends, chemical bonding, or colligative properties. "
+                "The question should require the student to explain a concept or relationship, not just recall a fact. "
+                "Return ONLY the question text, no preamble or topic label."
+            )
+        }],
+        timeout=30.0
+    )
+    return response.choices[0].message.content.strip()
+
+
 # --- 1. FRONTEND: Student Interface ---
 st.set_page_config(page_title="Oral Exam: General Chemistry", layout="wide")
 st.title("Oral Exam: General Chemistry")
-st.write("**Prompt:** Explain the Ideal Gas Law ($PV = nRT$). Describe the relationship between the variables and the core assumptions of an ideal gas.")
+
+if "question" not in st.session_state:
+    with st.spinner("Loading question..."):
+        try:
+            st.session_state["question"] = generate_question(client)
+        except Exception as e:
+            st.error(f"❌ Failed to generate question: {str(e)}")
+            st.stop()
+
+st.write(f"**Prompt:** {st.session_state['question']}")
 st.caption("☁️ **Cloud Version** - Shareable with colleagues via link")
 
 audio_bytes = st.audio_input("Record your answer:")
@@ -77,10 +104,11 @@ if audio_bytes:
 
     # --- 3. EVALUATION: LLM Structured Output (using OpenAI o3-mini) ---
     with st.spinner("Evaluating conceptual accuracy..."):
-        system_prompt = """You are a general chemistry evaluator. Read the transcript. 
-Evaluate if the student accurately explained the Ideal Gas Law, including the proportional relationships between variables, and the assumptions of the kinetic molecular theory (e.g., no intermolecular forces, negligible particle volume).
+        system_prompt = f"""You are a general chemistry evaluator. The student was asked: "{st.session_state['question']}"
 
-You MUST respond in valid JSON format with exactly three keys: 
+Read their transcript and evaluate how accurately and completely they answered the question.
+
+You MUST respond in valid JSON format with exactly three keys:
 - "Score" (integer out of 10)
 - "Feedback" (string, 1-2 sentences)
 - "Misconceptions_Flagged" (boolean)
