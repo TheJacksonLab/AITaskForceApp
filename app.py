@@ -32,23 +32,40 @@ except Exception as e:
     st.error(f"❌ Failed to initialize AssemblyAI: {str(e)}")
     st.stop()
 
-def generate_question(client):
+TOPICS = {
+    "Random (any topic)": (
+        "Pick a random topic from the following course syllabus: "
+        "stoichiometry (limiting reagents, percent yield, solution stoichiometry); "
+        "gases (ideal gas law, gas mixtures, kinetic molecular theory, real gases and van der Waals equation); "
+        "chemical equilibrium (equilibrium expressions, Le Chatelier's principle, Kp vs Kc); "
+        "energy and enthalpy (heat transfer, Hess's law, calorimetry, bond enthalpies); "
+        "thermodynamics (entropy, Gibbs free energy, spontaneity, thermodynamic vs kinetic control); "
+        "periodic table trends (atomic radius, ionization energy, electronegativity, electron affinity); "
+        "chemical bonding and Lewis structures (ionic vs covalent, formal charge, resonance); "
+        "VSEPR, molecular geometry, polarity, and intermolecular forces; "
+        "chemical kinetics (rate laws, reaction order, Arrhenius equation, reaction mechanisms, catalysis)."
+    ),
+    "Stoichiometry": "Focus on stoichiometry: limiting reagents, percent yield, and solution stoichiometry.",
+    "Gases": "Focus on gases: ideal gas law, gas mixtures, kinetic molecular theory, real gases, and the van der Waals equation.",
+    "Chemical Equilibrium": "Focus on chemical equilibrium: equilibrium expressions, Le Chatelier's principle, and Kp vs Kc.",
+    "Energy & Enthalpy": "Focus on energy and enthalpy: heat transfer, Hess's law, calorimetry, and bond enthalpies.",
+    "Thermodynamics": "Focus on thermodynamics: entropy, Gibbs free energy, spontaneity, and thermodynamic vs kinetic control.",
+    "Periodic Table Trends": "Focus on periodic table trends: atomic radius, ionization energy, electronegativity, and electron affinity.",
+    "Chemical Bonding & Lewis Structures": "Focus on chemical bonding and Lewis structures: ionic vs covalent bonding, formal charge, and resonance.",
+    "VSEPR, Polarity & IMFs": "Focus on VSEPR theory, molecular geometry, polarity, and intermolecular forces.",
+    "Chemical Kinetics": "Focus on chemical kinetics: rate laws, reaction order, the Arrhenius equation, reaction mechanisms, and catalysis.",
+}
+
+
+def generate_question(client, topic: str):
+    topic_instruction = TOPICS[topic]
     response = client.chat.completions.create(
         model="o3-mini",
         messages=[{
             "role": "user",
             "content": (
                 "Generate a single oral exam question for an undergraduate general chemistry course (Chemistry 202). "
-                "Pick a random topic from the following course syllabus: "
-                "stoichiometry (limiting reagents, percent yield, solution stoichiometry); "
-                "gases (ideal gas law, gas mixtures, kinetic molecular theory, real gases and van der Waals equation); "
-                "chemical equilibrium (equilibrium expressions, Le Chatelier's principle, Kp vs Kc); "
-                "energy and enthalpy (heat transfer, Hess's law, calorimetry, bond enthalpies); "
-                "thermodynamics (entropy, Gibbs free energy, spontaneity, thermodynamic vs kinetic control); "
-                "periodic table trends (atomic radius, ionization energy, electronegativity, electron affinity); "
-                "chemical bonding and Lewis structures (ionic vs covalent, formal charge, resonance); "
-                "VSEPR, molecular geometry, polarity, and intermolecular forces; "
-                "chemical kinetics (rate laws, reaction order, Arrhenius equation, reaction mechanisms, catalysis). "
+                f"{topic_instruction} "
                 "The question should require the student to explain a concept, describe a relationship between variables, or reason through a scenario — not just recall a definition. "
                 "Return ONLY the question text, no preamble or topic label."
             )
@@ -62,10 +79,23 @@ def generate_question(client):
 st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
 st.title("Oral Exam Test for CHEM202 - AITaskForce")
 
+# --- Sidebar: Topic Pinning ---
+with st.sidebar:
+    st.header("Question Settings")
+    selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
+    if st.button("New Question"):
+        st.session_state.pop("question", None)
+        st.session_state.pop("active_topic", None)
+
+# If topic changed, discard the cached question so a new one is generated
+if st.session_state.get("active_topic") != selected_topic:
+    st.session_state.pop("question", None)
+    st.session_state["active_topic"] = selected_topic
+
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
         try:
-            st.session_state["question"] = generate_question(client)
+            st.session_state["question"] = generate_question(client, selected_topic)
         except Exception as e:
             st.error(f"❌ Failed to generate question: {str(e)}")
             st.stop()
