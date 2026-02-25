@@ -20,8 +20,17 @@ if not assemblyai_api_key:
     st.error("❌ ASSEMBLYAI_API_KEY not found. Please set it in Streamlit secrets or .env file.")
     st.stop()
 
-client = OpenAI(api_key=openai_api_key)
-aai.settings.api_key = assemblyai_api_key
+try:
+    client = OpenAI(api_key=openai_api_key)
+except Exception as e:
+    st.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
+    st.stop()
+
+try:
+    aai.settings.api_key = assemblyai_api_key
+except Exception as e:
+    st.error(f"❌ Failed to initialize AssemblyAI: {str(e)}")
+    st.stop()
 
 # --- 1. FRONTEND: Student Interface ---
 st.set_page_config(page_title="Oral Exam: General Chemistry", layout="wide")
