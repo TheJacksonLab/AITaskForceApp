@@ -38,10 +38,18 @@ def generate_question(client):
         messages=[{
             "role": "user",
             "content": (
-                "Generate a single oral exam question for an undergraduate general chemistry course. "
-                "Pick a random topic from: stoichiometry, thermodynamics, chemical kinetics, equilibrium, "
-                "electrochemistry, acid-base chemistry, gas laws, periodic trends, chemical bonding, or colligative properties. "
-                "The question should require the student to explain a concept or relationship, not just recall a fact. "
+                "Generate a single oral exam question for an undergraduate general chemistry course (Chemistry 202). "
+                "Pick a random topic from the following course syllabus: "
+                "stoichiometry (limiting reagents, percent yield, solution stoichiometry); "
+                "gases (ideal gas law, gas mixtures, kinetic molecular theory, real gases and van der Waals equation); "
+                "chemical equilibrium (equilibrium expressions, Le Chatelier's principle, Kp vs Kc); "
+                "energy and enthalpy (heat transfer, Hess's law, calorimetry, bond enthalpies); "
+                "thermodynamics (entropy, Gibbs free energy, spontaneity, thermodynamic vs kinetic control); "
+                "periodic table trends (atomic radius, ionization energy, electronegativity, electron affinity); "
+                "chemical bonding and Lewis structures (ionic vs covalent, formal charge, resonance); "
+                "VSEPR, molecular geometry, polarity, and intermolecular forces; "
+                "chemical kinetics (rate laws, reaction order, Arrhenius equation, reaction mechanisms, catalysis). "
+                "The question should require the student to explain a concept, describe a relationship between variables, or reason through a scenario — not just recall a definition. "
                 "Return ONLY the question text, no preamble or topic label."
             )
         }],
@@ -51,8 +59,8 @@ def generate_question(client):
 
 
 # --- 1. FRONTEND: Student Interface ---
-st.set_page_config(page_title="Oral Exam: General Chemistry", layout="wide")
-st.title("Oral Exam: General Chemistry")
+st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
+st.title("Oral Exam Test for CHEM202 - AITaskForce")
 
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
