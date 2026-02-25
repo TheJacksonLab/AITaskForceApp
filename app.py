@@ -57,8 +57,41 @@ TOPICS = {
 }
 
 
-def generate_question(client, topic: str):
+QUESTION_STYLES = {
+    "Random (any style)": (
+        "Choose randomly from these question styles: "
+        "a real-world scenario the student must explain chemically; "
+        "a 'predict and explain' question where a variable changes and the student reasons through the outcome; "
+        "a troubleshooting scenario where something unexpected happened and the student diagnoses why; "
+        "or a compare-and-contrast between two systems, conditions, or substances."
+    ),
+    "Real-world scenario": (
+        "Frame the question as an observable phenomenon, everyday situation, or news-worthy event "
+        "(e.g., cooking, environmental chemistry, medicine, engineering, weather) that the student must explain "
+        "using chemical principles. Start with a concrete observation or context, then ask 'why' or 'how'."
+    ),
+    "Predict & explain": (
+        "Ask the student to predict what happens when a condition changes — temperature, pressure, concentration, "
+        "catalyst, solvent, etc. — and explain the chemical reasoning behind their prediction. "
+        "Use stems like 'What would happen if...', 'How would X change if Y were doubled...', or 'A chemist increases...'."
+    ),
+    "Troubleshoot": (
+        "Describe a scenario where something went wrong or produced an unexpected result in a lab or real-world setting. "
+        "Ask the student to diagnose the chemical reason. "
+        "Use stems like 'A student ran an experiment and observed...', 'A reaction produced far less product than expected...', "
+        "or 'An engineer noticed that...'."
+    ),
+    "Compare & contrast": (
+        "Ask the student to compare two related substances, systems, conditions, or processes and explain "
+        "the chemical reasoning behind their differences or similarities in behavior. "
+        "Use stems like 'Compare how...', 'Why does X behave differently from Y when...', or 'Under what conditions would X be preferred over Y?'."
+    ),
+}
+
+
+def generate_question(client, topic: str, style: str):
     topic_instruction = TOPICS[topic]
+    style_instruction = QUESTION_STYLES[style]
     response = client.chat.completions.create(
         model="o3-mini",
         messages=[{
@@ -66,8 +99,10 @@ def generate_question(client, topic: str):
             "content": (
                 "Generate a single oral exam question for an undergraduate general chemistry course (Chemistry 202). "
                 f"{topic_instruction} "
-                "The question should require the student to explain a concept, describe a relationship between variables, or reason through a scenario — not just recall a definition. "
-                "Return ONLY the question text, no preamble or topic label."
+                f"{style_instruction} "
+                "The question must require genuine chemical reasoning and sense-making — not recitation of facts, definitions, or formulas. "
+                "Do NOT use question stems like 'Define', 'List', 'State', or 'What is the formula for'. "
+                "Return ONLY the question text, no preamble, topic label, or style label."
             )
         }],
         timeout=30.0
@@ -79,23 +114,30 @@ def generate_question(client, topic: str):
 st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
 st.title("Oral Exam Test for CHEM202 - AITaskForce")
 
-# --- Sidebar: Topic Pinning ---
+# --- Sidebar: Topic Pinning & Question Style ---
 with st.sidebar:
     st.header("Question Settings")
     selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
+    selected_style = st.selectbox("Question style", options=list(QUESTION_STYLES.keys()), index=0)
     if st.button("New Question"):
         st.session_state.pop("question", None)
         st.session_state.pop("active_topic", None)
+        st.session_state.pop("active_style", None)
 
-# If topic changed, discard the cached question so a new one is generated
-if st.session_state.get("active_topic") != selected_topic:
+# If topic or style changed, discard the cached question so a new one is generated
+settings_changed = (
+    st.session_state.get("active_topic") != selected_topic
+    or st.session_state.get("active_style") != selected_style
+)
+if settings_changed:
     st.session_state.pop("question", None)
     st.session_state["active_topic"] = selected_topic
+    st.session_state["active_style"] = selected_style
 
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
         try:
-            st.session_state["question"] = generate_question(client, selected_topic)
+            st.session_state["question"] = generate_question(client, selected_topic, selected_style)
         except Exception as e:
             st.error(f"❌ Failed to generate question: {str(e)}")
             st.stop()
