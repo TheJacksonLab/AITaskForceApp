@@ -49,19 +49,33 @@ except Exception as e:
 # ── Google Sheets helpers ─────────────────────────────────────────────────────
 def get_gspread_client():
     """
-    Parse service account JSON from secrets and return an authorised gspread
-    client. Returns None (with a warning) if credentials are missing or
-    malformed — the exam still works; only logging is skipped.
+    Authenticate with Google Sheets using service account credentials.
+    Tries the recommended TOML section format ([gcp_service_account]) first,
+    then falls back to a JSON string (GOOGLE_SHEETS_CREDENTIALS).
+    Returns None with a warning if credentials are unavailable — the exam
+    still works; only logging is skipped.
     """
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    # Preferred: credentials stored as a TOML section in Streamlit secrets
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        return gspread.authorize(creds)
+    except KeyError:
+        pass  # section not present, try JSON string fallback
+    except Exception as e:
+        st.warning(f"⚠ Could not connect to Google Sheets: {e} — submissions will not be logged.")
+        return None
+
+    # Fallback: credentials stored as a minified JSON string
     if not google_creds_str:
-        st.warning("⚠ GOOGLE_SHEETS_CREDENTIALS not configured — submissions will not be logged.")
+        st.warning("⚠ Google Sheets credentials not configured — submissions will not be logged.")
         return None
     try:
         creds_dict = json.loads(google_creds_str)
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(creds)
     except json.JSONDecodeError:

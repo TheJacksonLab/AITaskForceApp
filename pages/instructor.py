@@ -59,14 +59,19 @@ if not st.session_state["instructor_authenticated"]:
 # ── Google Sheets data loader ─────────────────────────────────────────────────
 @st.cache_data(ttl=60)
 def load_sheet_data() -> pd.DataFrame:
-    if not GOOGLE_CREDS_STR:
-        raise ValueError("GOOGLE_SHEETS_CREDENTIALS secret is not configured.")
-
-    creds_dict = json.loads(GOOGLE_CREDS_STR)
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
+    # Preferred: TOML section [gcp_service_account]
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+    except KeyError:
+        # Fallback: JSON string
+        if not GOOGLE_CREDS_STR:
+            raise ValueError("Google Sheets credentials not configured. Add a [gcp_service_account] section to Streamlit secrets.")
+        creds_dict = json.loads(GOOGLE_CREDS_STR)
+
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open(GOOGLE_SHEET_NAME)
