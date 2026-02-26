@@ -201,8 +201,7 @@ with st.sidebar:
     selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
     selected_style = st.selectbox("Question style", options=list(QUESTION_STYLES.keys()), index=0)
     if st.button("New Question"):
-        for key in ("question", "active_topic", "active_style"):
-            st.session_state.pop(key, None)
+        st.session_state.pop("question", None)
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -238,9 +237,11 @@ settings_changed = (
 )
 if settings_changed:
     st.session_state.pop("question", None)
+    was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
     st.session_state["active_style"] = selected_style
-    st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
+    if was_initialized:  # Don't increment on initial page load, only on actual topic/style changes
+        st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
