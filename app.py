@@ -203,6 +203,7 @@ with st.sidebar:
     if st.button("New Question"):
         for key in ("question", "active_topic", "active_style"):
             st.session_state.pop(key, None)
+        st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FEATURE 1: Student Identity Gate
@@ -239,6 +240,7 @@ if settings_changed:
     st.session_state.pop("question", None)
     st.session_state["active_topic"] = selected_topic
     st.session_state["active_style"] = selected_style
+    st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
@@ -266,16 +268,19 @@ st.info(
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FEATURE 3: Typed Fallback Answer
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+attempt = st.session_state.get("attempt_counter", 0)
+
 answer_method = st.radio(
     "How would you like to submit your answer?",
     options=["Record audio", "Type my answer"],
     horizontal=True,
+    key=f"answer_method_{attempt}",
 )
 answer_method_logged = "audio" if answer_method == "Record audio" else "typed"
 transcript_text = None
 
 if answer_method == "Record audio":
-    audio_bytes = st.audio_input("Record your answer:")
+    audio_bytes = st.audio_input("Record your answer:", key=f"audio_input_{attempt}")
 
     if audio_bytes:
         # --- 2. TRANSCRIPTION: AssemblyAI ---
@@ -310,6 +315,7 @@ else:
         "Type your answer here:",
         height=200,
         placeholder="Write your full answer to the question above...",
+        key=f"typed_answer_{attempt}",
     )
     if st.button("Submit typed answer"):
         if not typed_answer.strip():
