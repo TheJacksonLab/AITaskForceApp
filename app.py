@@ -3,6 +3,7 @@ from openai import OpenAI
 import assemblyai as aai
 import json
 import os
+import random
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -138,6 +139,44 @@ TOPICS = {
     "Chemical Kinetics": "Focus on chemical kinetics: rate laws, reaction order, the Arrhenius equation, reaction mechanisms, and catalysis.",
 }
 
+REAL_WORLD_DOMAINS = [
+    "smartphone lithium-ion batteries overheating in a pocket",
+    "SPF ratings in sunscreen and UV protection",
+    "PFAS 'forever chemicals' detected in drinking water",
+    "microplastics accumulating in the ocean",
+    "wildfire smoke and air quality index",
+    "electric vehicle battery range dropping in cold weather",
+    "tattoo ink fading and breaking down under skin",
+    "energy drink ingredients (caffeine, taurine, B vitamins) and the body",
+    "teeth whitening strips and enamel",
+    "skincare actives — retinol, niacinamide, AHAs — and skin pH",
+    "vaping aerosol chemistry and lung exposure",
+    "Ozempic / GLP-1 receptor agonists and metabolism",
+    "protein powder supplements and nitrogen content",
+    "glow sticks at concerts — chemiluminescence",
+    "OLED screens on phones and electroluminescence",
+    "concrete cracking in bridges and chemical weathering",
+    "car airbag sodium azide rapid decomposition",
+    "pool chlorination and disinfection byproducts",
+    "dry ice sublimation in shipping packages",
+    "wine or beer fermentation gone wrong — off-flavors and spoilage",
+    "fast fashion synthetic dyes polluting rivers",
+    "solar panel semiconductor chemistry and the photoelectric effect",
+    "reusable water bottle BPA leaching",
+    "carbon dating ancient artifacts",
+    "mRNA vaccine cold-chain storage requirements",
+    "antibiotic resistance and bacterial cell membranes",
+    "hand sanitizer alcohol chemistry and why concentration matters",
+    "sunburn and UV-induced DNA damage",
+    "contact lens oxygen permeability and polymer chemistry",
+    "composting and the chemistry of organic decomposition",
+    "food dye stability in acidic vs. basic drinks",
+    "nicotine patches and transdermal drug delivery",
+    "rust on a bike left outside — electrochemical corrosion",
+    "the Maillard reaction when toasting bread or searing meat",
+    "acetaminophen (Tylenol) overdose and liver chemistry",
+]
+
 QUESTION_STYLES = {
     "Random (any style)": (
         "Choose randomly from these question styles: "
@@ -147,21 +186,9 @@ QUESTION_STYLES = {
         "or a compare-and-contrast between two systems, conditions, or substances."
     ),
     "Real-world scenario": (
-        "Frame the question around a specific, vivid real-world context that a college student in 2025 would genuinely recognize or care about. "
-        "Pick ONE domain from this list — do NOT default to cooking, rain, or generic weather: "
-        "smartphone lithium-ion batteries overheating, SPF in sunscreen blocking UV, PFAS 'forever chemicals' in drinking water, "
-        "microplastics in the ocean breaking down, wildfire smoke and air quality index, "
-        "electric vehicle battery range in cold weather, tattoo ink fading over time, "
-        "energy drink ingredients (caffeine, taurine, B vitamins), teeth whitening strips, "
-        "skincare actives (retinol, niacinamide, hyaluronic acid, AHAs), vaping aerosol chemistry, "
-        "Ozempic/GLP-1 drugs and metabolism, protein powder supplements and nitrogen content, "
-        "glow sticks at concerts, OLED screens on phones, noise-canceling headphone drivers, "
-        "concrete cracking in bridges, car airbag sodium azide reaction, pool chlorination, "
-        "dry ice in shipping packages, wine or beer fermentation gone wrong, "
-        "fast fashion synthetic dyes in rivers, solar panel semiconductor chemistry, "
-        "reusable water bottle BPA leaching, carbon dating ancient artifacts, "
-        "mRNA vaccine stability requiring cold storage, or antibiotic resistance and cell membranes. "
-        "Describe one brief, concrete observation from that context, then ask the student to explain the chemistry."
+        "Frame the question around this specific real-world context: {domain}. "
+        "Describe one brief, concrete observation from that context that a college student in 2025 would recognize, "
+        "then ask the student to explain the underlying chemistry."
     ),
     "Predict & explain": (
         "Ask the student to predict what happens when one variable changes in a real, relatable system, and explain why. "
@@ -204,7 +231,11 @@ QUESTION_STYLES = {
 
 def generate_question(client, topic: str, style: str) -> str:
     topic_instruction = TOPICS[topic]
-    style_instruction = QUESTION_STYLES[style]
+    if style == "Real-world scenario":
+        domain = random.choice(REAL_WORLD_DOMAINS)
+        style_instruction = QUESTION_STYLES[style].format(domain=domain)
+    else:
+        style_instruction = QUESTION_STYLES[style]
     response = client.chat.completions.create(
         model="o3-mini",
         messages=[{
