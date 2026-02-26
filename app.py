@@ -178,10 +178,13 @@ def generate_question(client, topic: str, style: str) -> str:
         messages=[{
             "role": "user",
             "content": (
-                "Generate a single oral exam question for an undergraduate general chemistry course (Chemistry 202). "
+                "Generate a single short oral exam question for an undergraduate general chemistry course (Chemistry 202). "
                 f"{topic_instruction} "
                 f"{style_instruction} "
-                "The question must require genuine chemical reasoning and sense-making — not recitation of facts, definitions, or formulas. "
+                "The question should ask the student to explain a basic concept or describe a simple relationship — "
+                "accessible to a student who has attended lectures and done the reading, but not necessarily mastered the material deeply. "
+                "Avoid multi-part questions, advanced problem-solving, or questions that require strong quantitative reasoning. "
+                "Keep the question to 1-2 sentences. "
                 "Do NOT use question stems like 'Define', 'List', 'State', or 'What is the formula for'. "
                 "Return ONLY the question text, no preamble, topic label, or style label."
             )
