@@ -3,14 +3,27 @@ from openai import OpenAI
 import assemblyai as aai
 import json
 import os
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+import gspread
+from google.oauth2.service_account import Credentials
+
 load_dotenv()
 
-# Initialize OpenAI client with API key from .env
-openai_api_key = os.getenv("OPENAI_API_KEY")
-assemblyai_api_key = os.getenv("ASSEMBLYAI_API_KEY")
+
+# ── Secret resolution: prefer st.secrets (Streamlit Cloud), fall back to env ──
+def _get_secret(key: str):
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.getenv(key)
+
+
+openai_api_key     = _get_secret("OPENAI_API_KEY")
+assemblyai_api_key = _get_secret("ASSEMBLYAI_API_KEY")
+google_creds_str   = _get_secret("GOOGLE_SHEETS_CREDENTIALS")
+google_sheet_name  = _get_secret("GOOGLE_SHEET_NAME") or "CHEM202_OralExam_Submissions"
 
 if not openai_api_key:
     st.error("❌ OPENAI_API_KEY not found. Please set it in Streamlit secrets or .env file.")
@@ -32,6 +45,61 @@ except Exception as e:
     st.error(f"❌ Failed to initialize AssemblyAI: {str(e)}")
     st.stop()
 
+
+# ── Google Sheets helpers ─────────────────────────────────────────────────────
+def get_gspread_client():
+    """
+    Parse service account JSON from secrets and return an authorised gspread
+    client. Returns None (with a warning) if credentials are missing or
+    malformed — the exam still works; only logging is skipped.
+    """
+    if not google_creds_str:
+        st.warning("⚠ GOOGLE_SHEETS_CREDENTIALS not configured — submissions will not be logged.")
+        return None
+    try:
+        creds_dict = json.loads(google_creds_str)
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        return gspread.authorize(creds)
+    except json.JSONDecodeError:
+        st.warning("⚠ GOOGLE_SHEETS_CREDENTIALS is not valid JSON — submissions will not be logged.")
+        return None
+    except Exception as e:
+        st.warning(f"⚠ Could not connect to Google Sheets: {e} — submissions will not be logged.")
+        return None
+
+
+def append_to_sheet(row: list):
+    """
+    Append a single row to the Google Sheet.
+    Failures warn but never call st.stop() — logging must not break the exam.
+    Row order: timestamp, student_name, student_id, topic, style, question,
+               answer_method, transcript, score, feedback, misconceptions_flagged
+    """
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return
+        sh = gc.open(google_sheet_name)
+        worksheet = sh.sheet1
+        if worksheet.row_count == 0 or worksheet.acell("A1").value is None:
+            headers = [
+                "timestamp", "student_name", "student_id", "topic", "style",
+                "question", "answer_method", "transcript", "score",
+                "feedback", "misconceptions_flagged",
+            ]
+            worksheet.append_row(headers)
+        worksheet.append_row(row)
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.warning(f"⚠ Google Sheet '{google_sheet_name}' not found — check GOOGLE_SHEET_NAME and sharing permissions.")
+    except Exception as e:
+        st.warning(f"⚠ Failed to write to Google Sheets: {e}")
+
+
+# ── Topic and style definitions ───────────────────────────────────────────────
 TOPICS = {
     "Random (any topic)": (
         "Pick a random topic from the following course syllabus: "
@@ -55,7 +123,6 @@ TOPICS = {
     "VSEPR, Polarity & IMFs": "Focus on VSEPR theory, molecular geometry, polarity, and intermolecular forces.",
     "Chemical Kinetics": "Focus on chemical kinetics: rate laws, reaction order, the Arrhenius equation, reaction mechanisms, and catalysis.",
 }
-
 
 QUESTION_STYLES = {
     "Random (any style)": (
@@ -89,7 +156,7 @@ QUESTION_STYLES = {
 }
 
 
-def generate_question(client, topic: str, style: str):
+def generate_question(client, topic: str, style: str) -> str:
     topic_instruction = TOPICS[topic]
     style_instruction = QUESTION_STYLES[style]
     response = client.chat.completions.create(
@@ -110,21 +177,46 @@ def generate_question(client, topic: str, style: str):
     return response.choices[0].message.content.strip()
 
 
-# --- 1. FRONTEND: Student Interface ---
+# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
 st.title("Oral Exam Test for CHEM202 - AITaskForce")
 
-# --- Sidebar: Topic Pinning & Question Style ---
+# ── Sidebar: Topic Pinning & Question Style ───────────────────────────────────
 with st.sidebar:
     st.header("Question Settings")
     selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
     selected_style = st.selectbox("Question style", options=list(QUESTION_STYLES.keys()), index=0)
     if st.button("New Question"):
-        st.session_state.pop("question", None)
-        st.session_state.pop("active_topic", None)
-        st.session_state.pop("active_style", None)
+        for key in ("question", "active_topic", "active_style"):
+            st.session_state.pop(key, None)
 
-# If topic or style changed, discard the cached question so a new one is generated
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FEATURE 1: Student Identity Gate
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if "student_name" not in st.session_state:
+    st.subheader("Student Information")
+    st.write("Please enter your information before the exam question loads.")
+    with st.form("student_gate_form"):
+        name_input = st.text_input("Full Name", placeholder="Jane Smith")
+        id_input   = st.text_input("Student ID", placeholder="e.g. 12345678")
+        submitted  = st.form_submit_button("Begin Exam")
+    if submitted:
+        if not name_input.strip() or not id_input.strip():
+            st.error("Both Full Name and Student ID are required.")
+        else:
+            st.session_state["student_name"]   = name_input.strip()
+            st.session_state["student_id"]     = id_input.strip()
+            st.session_state["exam_timestamp"] = datetime.now(timezone.utc).isoformat()
+            st.rerun()
+    st.stop()
+
+student_name   = st.session_state["student_name"]
+student_id     = st.session_state["student_id"]
+exam_timestamp = st.session_state["exam_timestamp"]
+
+st.caption(f"Logged in as: **{student_name}** | ID: {student_id} | ☁️ Cloud Version")
+
+# ── Question caching ──────────────────────────────────────────────────────────
 settings_changed = (
     st.session_state.get("active_topic") != selected_topic
     or st.session_state.get("active_style") != selected_style
@@ -142,91 +234,154 @@ if "question" not in st.session_state:
             st.error(f"❌ Failed to generate question: {str(e)}")
             st.stop()
 
-st.write(f"**Prompt:** {st.session_state['question']}")
-st.caption("☁️ **Cloud Version** - Shareable with colleagues via link")
+question = st.session_state["question"]
+st.write(f"**Prompt:** {question}")
 
-audio_bytes = st.audio_input("Record your answer:")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FEATURE 2: Rubric Transparency
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+st.info(
+    "**Scoring Rubric** — your answer will be evaluated on:\n\n"
+    "- **Conceptual Accuracy** — are the chemical principles correct?\n"
+    "- **Reasoning Quality** — do you explain *why*, not just *what*?\n"
+    "- **Correct Terminology** — are terms used precisely and appropriately?\n"
+    "- **Addressing the Question** — does your answer directly respond to what was asked?\n\n"
+    "Answers are scored out of 10 by an AI evaluator using these four dimensions."
+)
 
-if audio_bytes:
-    # --- 2. TRANSCRIPTION: AssemblyAI ---
-    with st.spinner("Transcribing audio..."):
-        temp_audio_path = "temp_audio.wav"
-        try:
-            # Save audio file temporarily
-            with open(temp_audio_path, "wb") as f:
-                f.write(audio_bytes.getbuffer())
-            
-            # Use AssemblyAI to transcribe
-            transcriber = aai.Transcriber()
-            transcript = transcriber.transcribe(
-                temp_audio_path,
-                config=aai.TranscriptionConfig(
-                    language_code="en",
-                    speech_models=["universal-2"],
-                    entity_detection=True
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FEATURE 3: Typed Fallback Answer
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+answer_method = st.radio(
+    "How would you like to submit your answer?",
+    options=["Record audio", "Type my answer"],
+    horizontal=True,
+)
+answer_method_logged = "audio" if answer_method == "Record audio" else "typed"
+transcript_text = None
+
+if answer_method == "Record audio":
+    audio_bytes = st.audio_input("Record your answer:")
+
+    if audio_bytes:
+        # --- 2. TRANSCRIPTION: AssemblyAI ---
+        with st.spinner("Transcribing audio..."):
+            temp_audio_path = "temp_audio.wav"
+            try:
+                with open(temp_audio_path, "wb") as f:
+                    f.write(audio_bytes.getbuffer())
+                transcriber = aai.Transcriber()
+                transcript = transcriber.transcribe(
+                    temp_audio_path,
+                    config=aai.TranscriptionConfig(
+                        language_code="en",
+                        speech_models=["universal-2"],
+                        entity_detection=True,
+                    ),
                 )
-            )
-            
-            transcript_text = transcript.text
-            st.success("✓ Audio transcribed successfully")
-            
-        except Exception as e:
-            st.error(f"❌ Transcription failed: {str(e)}")
-            st.stop()
-        
-        finally:
-            # Clean up temporary audio file
-            if os.path.exists(temp_audio_path):
-                try:
-                    os.remove(temp_audio_path)
-                except Exception as e:
-                    st.warning(f"⚠ Could not delete temp file: {str(e)}")
+                transcript_text = transcript.text
+                st.success("✓ Audio transcribed successfully")
+            except Exception as e:
+                st.error(f"❌ Transcription failed: {str(e)}")
+                st.stop()
+            finally:
+                if os.path.exists(temp_audio_path):
+                    try:
+                        os.remove(temp_audio_path)
+                    except Exception as cleanup_err:
+                        st.warning(f"⚠ Could not delete temp file: {cleanup_err}")
+
+else:
+    typed_answer = st.text_area(
+        "Type your answer here:",
+        height=200,
+        placeholder="Write your full answer to the question above...",
+    )
+    if st.button("Submit typed answer"):
+        if not typed_answer.strip():
+            st.error("Please write an answer before submitting.")
+        else:
+            transcript_text = typed_answer.strip()
+            st.success("✓ Typed answer received")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# EVALUATION — runs for both audio and typed paths once transcript_text is set
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if transcript_text:
+
+    # --- FEATURE 4: Audit Log ---
+    audit_log = (
+        f"[AUDIT LOG]\n"
+        f"Student: {student_name} | ID: {student_id}\n"
+        f"Timestamp: {exam_timestamp}\n"
+        f"Topic: {selected_topic} | Style: {selected_style}\n"
+        f"Question: {question}\n"
+        f"Answer method: {answer_method_logged}\n"
+        f"---\n"
+        f"TRANSCRIPT:\n"
+        f"{transcript_text}"
+    )
 
     # --- 3. EVALUATION: LLM Structured Output (using OpenAI o3-mini) ---
     with st.spinner("Evaluating conceptual accuracy..."):
-        system_prompt = f"""You are a general chemistry evaluator. The student was asked: "{st.session_state['question']}"
+        system_prompt = (
+            f'You are a general chemistry evaluator. The student was asked: "{question}"\n\n'
+            "Read their transcript and evaluate how accurately and completely they answered the question.\n\n"
+            "You MUST respond in valid JSON format with exactly three keys:\n"
+            '- "Score" (integer out of 10)\n'
+            '- "Feedback" (string, 1-2 sentences)\n'
+            '- "Misconceptions_Flagged" (boolean)\n\n'
+            "Respond with ONLY the JSON object, no additional text."
+        )
 
-Read their transcript and evaluate how accurately and completely they answered the question.
-
-You MUST respond in valid JSON format with exactly three keys:
-- "Score" (integer out of 10)
-- "Feedback" (string, 1-2 sentences)
-- "Misconceptions_Flagged" (boolean)
-
-Respond with ONLY the JSON object, no additional text."""
-        
         try:
             response = client.chat.completions.create(
                 model="o3-mini",
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Transcript: {transcript_text}"}
+                    {"role": "user", "content": f"Transcript: {audit_log}"},
                 ],
-                timeout=60.0
+                timeout=60.0,
             )
-            
+
             evaluation = json.loads(response.choices[0].message.content)
             st.success("✓ Evaluation complete")
-            
-            # Display results in a organized format
+
+            score          = evaluation.get("Score", "N/A")
+            feedback       = evaluation.get("Feedback", "No feedback available")
+            misconceptions = evaluation.get("Misconceptions_Flagged", False)
+
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Score", f"{evaluation.get('Score', 'N/A')}/10")
+                st.metric("Score", f"{score}/10")
             with col2:
-                st.metric("Misconceptions?", "Yes" if evaluation.get('Misconceptions_Flagged') else "No")
-            
+                st.metric("Misconceptions?", "Yes" if misconceptions else "No")
+
             st.subheader("📋 Feedback")
-            st.info(evaluation.get('Feedback', 'No feedback available'))
-            
-            # Show full JSON for transparency
+            st.info(feedback)
+
             with st.expander("View full evaluation JSON"):
                 st.json(evaluation)
-            
-            # Display transcript for reference
+
             with st.expander("View transcript"):
                 st.text(transcript_text)
-            
+
+            # --- FEATURE 5: Google Sheets Logging ---
+            append_to_sheet([
+                exam_timestamp,
+                student_name,
+                student_id,
+                selected_topic,
+                selected_style,
+                question,
+                answer_method_logged,
+                transcript_text,
+                score,
+                feedback,
+                str(misconceptions),
+            ])
+
         except json.JSONDecodeError as e:
             st.error(f"❌ Invalid JSON response from API: {str(e)}")
         except Exception as e:
