@@ -147,25 +147,36 @@ QUESTION_STYLES = {
         "or a compare-and-contrast between two systems, conditions, or substances."
     ),
     "Real-world scenario": (
-        "Frame the question as an observable phenomenon, everyday situation, or news-worthy event "
-        "(e.g., cooking, environmental chemistry, medicine, engineering, weather) that the student must explain "
-        "using chemical principles. Start with a concrete observation or context, then ask 'why' or 'how'."
+        "Frame the question around a specific, concrete real-world context. "
+        "Choose ONE unexpected or underused domain from this list — do NOT default to cooking or weather: "
+        "scuba diving, lithium-ion batteries, swimming pool chemistry, baking bread, glow sticks, fireworks colors, "
+        "rusting metal, antacids, kidney stones, sunscreen, neon signs, hot air balloons, acid rain, concrete hardening, "
+        "car airbags, wine fermentation, photography film, fabric dyes, natural gas combustion, bleach, fertilizers, "
+        "carbon dating, smog formation, soap making, dry ice, rocket fuel, teeth whitening, dialysis, LCD screens, "
+        "or water treatment plants. "
+        "Describe one brief observation from that context, then ask the student to explain the chemistry behind it."
     ),
     "Predict & explain": (
-        "Ask the student to predict what happens when a condition changes — temperature, pressure, concentration, "
-        "catalyst, solvent, etc. — and explain the chemical reasoning behind their prediction. "
-        "Use stems like 'What would happen if...', 'How would X change if Y were doubled...', or 'A chemist increases...'."
+        "Ask the student to predict what happens when a single condition changes and explain why. "
+        "Vary the context widely — draw from situations like industrial processes, biological systems, lab experiments, "
+        "environmental events, or everyday objects. "
+        "Use stems like 'What would happen if...', 'How would X change if Y were increased...', or 'A technician notices...'."
     ),
     "Troubleshoot": (
-        "Describe a scenario where something went wrong or produced an unexpected result in a lab or real-world setting. "
+        "Describe a specific situation where something went wrong or gave a surprising result. "
+        "Vary the setting — draw from contexts like a student lab, a factory process, a hospital, a farm, "
+        "a kitchen, an environmental monitoring station, or an engineering facility. "
         "Ask the student to diagnose the chemical reason. "
-        "Use stems like 'A student ran an experiment and observed...', 'A reaction produced far less product than expected...', "
-        "or 'An engineer noticed that...'."
+        "Use stems like 'A student ran an experiment and observed...', 'A batch of product failed because...', "
+        "or 'A technician noticed an unexpected reading...'."
     ),
     "Compare & contrast": (
-        "Ask the student to compare two related substances, systems, conditions, or processes and explain "
-        "the chemical reasoning behind their differences or similarities in behavior. "
-        "Use stems like 'Compare how...', 'Why does X behave differently from Y when...', or 'Under what conditions would X be preferred over Y?'."
+        "Ask the student to compare two related substances, conditions, or processes. "
+        "Choose pairs that are adjacent in chemistry but meaningfully different — for example: "
+        "ionic vs. covalent solids, endothermic vs. exothermic dissolution, strong vs. weak acids, "
+        "a polar vs. nonpolar solvent, a catalyst vs. an inhibitor, sublimation vs. evaporation, "
+        "or a reversible vs. irreversible reaction. "
+        "Ask the student to explain what drives the difference in behavior."
     ),
 }
 
@@ -185,6 +196,7 @@ def generate_question(client, topic: str, style: str) -> str:
                 "accessible to a student who has attended lectures and done the reading, but not necessarily mastered the material deeply. "
                 "Avoid multi-part questions, advanced problem-solving, or questions that require strong quantitative reasoning. "
                 "Keep the question to 1-2 sentences. "
+                "Be creative and specific — avoid generic or overused textbook examples. "
                 "Do NOT use question stems like 'Define', 'List', 'State', or 'What is the formula for'. "
                 "Return ONLY the question text, no preamble, topic label, or style label."
             )
