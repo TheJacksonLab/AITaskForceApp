@@ -27,7 +27,7 @@ GOOGLE_SHEET_NAME   = _get_secret("GOOGLE_SHEET_NAME") or "CHEM202_OralExam_Subm
 SHEET_COLUMNS = [
     "timestamp", "student_name", "student_id", "topic", "style",
     "question", "answer_method", "transcript", "score",
-    "feedback", "misconceptions_flagged",
+    "feedback", "misconceptions_flagged", "trajectory",
 ]
 
 

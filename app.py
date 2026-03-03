@@ -104,7 +104,7 @@ def append_to_sheet(row: list):
             headers = [
                 "timestamp", "student_name", "student_id", "topic", "style",
                 "question", "answer_method", "transcript", "score",
-                "feedback", "misconceptions_flagged",
+                "feedback", "misconceptions_flagged", "trajectory",
             ]
             worksheet.append_row(headers)
         worksheet.append_row(row)
@@ -229,7 +229,50 @@ QUESTION_STYLES = {
 }
 
 
-def generate_question(client, topic: str, style: str) -> str:
+MAX_EXCHANGES = 6  # number of student response turns before grading is triggered
+
+EXAMINER_SYSTEM_PROMPT = """\
+You are an oral examiner for an undergraduate general chemistry course (CHEM202).
+
+ROLE: You are experienced, fair, and encouraging. Your goal is to accurately assess \
+the student's conceptual understanding through adaptive dialogue — not to trick or \
+discourage them.
+
+TOPIC: {topic_instruction}
+Stay on this topic throughout the examination.
+
+EXCHANGE COUNTER: You are responding to student response {current_exchange} of {max_exchanges}.
+
+DIFFICULTY RULES:
+- If the student demonstrates strong understanding: escalate — ask them to go deeper, \
+explain a mechanism, predict an outcome, or apply the concept to a new scenario.
+- If the student struggles or answers only partially: adapt — ask a simpler follow-up \
+that targets a foundational piece of the same concept.
+- If the student shows a persistent misconception: note it and probe further before moving on.
+- Never abandon a line of questioning while the student shows any partial understanding.
+
+HANDLING STUDENT QUESTIONS:
+- If the student asks for clarification about the wording or context of the question: \
+clarify it. This is not penalized.
+- If the student asks you to define a chemistry course concept (e.g. "what is entropy?", \
+"can you explain what a rate law is?"): do NOT provide the definition. Instead say something \
+like: "That concept is at the heart of what I'm asking — tell me what you understand about it." \
+Then redirect them back to the question.
+- If the student says they don't know: encourage them to try. Say something like: \
+"Take a guess — what do you think might be happening at the molecular level here?"
+
+TONE: Be warm and supportive. Acknowledge what the student gets right before probing gaps. \
+Partial credit is valid — say what they got right, then probe what's missing.
+
+FINAL TURN RULE: If current_exchange equals max_exchanges, do NOT ask another question. \
+Instead, thank the student warmly for their responses and let them know the examination \
+is now complete.
+
+Return ONLY your examiner response — no labels, no preamble, no meta-commentary.\
+"""
+
+
+def start_examination(client, topic: str, style: str) -> str:
     topic_instruction = TOPICS[topic]
     if style == "Real-world scenario":
         domain = random.choice(REAL_WORLD_DOMAINS)
@@ -241,12 +284,15 @@ def generate_question(client, topic: str, style: str) -> str:
         messages=[{
             "role": "user",
             "content": (
-                "Generate a single short oral exam question for an undergraduate general chemistry course (Chemistry 202). "
+                "Generate a single opening question for a dynamic oral examination in an undergraduate "
+                "general chemistry course (Chemistry 202). "
                 f"{topic_instruction} "
                 f"{style_instruction} "
-                "The question should ask the student to explain a basic concept or describe a simple relationship — "
-                "accessible to a student who has attended lectures and done the reading, but not necessarily mastered the material deeply. "
-                "Avoid multi-part questions, advanced problem-solving, or questions that require strong quantitative reasoning. "
+                "The opening question should be moderately challenging — harder than a simple recall "
+                "question, requiring the student to reason through a concept or explain a relationship, "
+                "not just recite a definition. It should be accessible to a well-prepared student but "
+                "push them to demonstrate deeper understanding. "
+                "Avoid multi-part questions and questions that require strong quantitative calculation. "
                 "Keep the question to 1-2 sentences. "
                 "Be creative and specific — avoid generic or overused textbook examples. "
                 "Do NOT use question stems like 'Define', 'List', 'State', or 'What is the formula for'. "
@@ -256,6 +302,75 @@ def generate_question(client, topic: str, style: str) -> str:
         timeout=30.0
     )
     return response.choices[0].message.content.strip()
+
+
+def get_examiner_response(
+    client, conversation: list, exchange_count: int, topic_instruction: str
+) -> str:
+    """Generate the examiner's next turn given the full conversation history."""
+    system_prompt = EXAMINER_SYSTEM_PROMPT.format(
+        topic_instruction=topic_instruction,
+        current_exchange=exchange_count,
+        max_exchanges=MAX_EXCHANGES,
+    )
+    messages = [{"role": "system", "content": system_prompt}]
+    for turn in conversation:
+        if turn["role"] == "examiner":
+            messages.append({"role": "assistant", "content": turn["content"]})
+        else:
+            messages.append({"role": "user", "content": turn["content"]})
+    response = client.chat.completions.create(
+        model="o3-mini",
+        messages=messages,
+        timeout=45.0,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def grade_conversation(
+    client, conversation: list, topic: str, style: str, opening_question: str
+) -> dict:
+    """Holistically grade the full examination transcript."""
+    lines = []
+    for turn in conversation:
+        label = "Examiner" if turn["role"] == "examiner" else "Student"
+        lines.append(f"[{label}]: {turn['content']}")
+    transcript = "\n\n".join(lines)
+
+    system_prompt = (
+        f"You are a general chemistry professor grading a complete oral examination.\n\n"
+        f"TOPIC: {topic} | STYLE: {style}\n"
+        f"OPENING QUESTION: {opening_question}\n\n"
+        "GRADING PHILOSOPHY:\n"
+        "- Evaluate the student's understanding across the ENTIRE conversation, not just their first response.\n"
+        "- Reward trajectory: a student who started uncertain but meaningfully improved should score "
+        "better than one who stayed confused throughout.\n"
+        "- Reward intellectual honesty and self-correction.\n"
+        "- Penalize persistent, uncorrected misconceptions more than early confusion followed by recovery.\n"
+        "- Do not penalize a student for asking clarifying questions about the question itself.\n\n"
+        "SCORING GUIDE:\n"
+        "- 9-10: Consistently accurate, strong reasoning, excellent terminology, shows real depth\n"
+        "- 7-8: Mostly accurate with minor gaps, good reasoning, clear improvement arc\n"
+        "- 5-6: Partial understanding, some correct elements, struggled but showed effort and engagement\n"
+        "- 3-4: Limited understanding, significant misconceptions, minimal improvement over exchanges\n"
+        "- 1-2: Fundamental misunderstanding throughout, no meaningful engagement\n\n"
+        "Respond in valid JSON with exactly these four keys:\n"
+        '- "Score" (integer 1-10)\n'
+        '- "Feedback" (string, 2-3 sentences: what they did well, what they struggled with, overall assessment)\n'
+        '- "Misconceptions_Flagged" (boolean: true if significant uncorrected misconceptions remain at the end)\n'
+        '- "Trajectory" (string, one of: "improving", "consistent_strong", "consistent_weak", "declining", "mixed")\n\n'
+        "Respond with ONLY the JSON object, no additional text."
+    )
+    response = client.chat.completions.create(
+        model="o3-mini",
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"TRANSCRIPT:\n\n{transcript}"},
+        ],
+        timeout=60.0,
+    )
+    return json.loads(response.choices[0].message.content)
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -268,7 +383,9 @@ with st.sidebar:
     selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
     selected_style = st.selectbox("Question style", options=list(QUESTION_STYLES.keys()), index=0)
     if st.button("New Question"):
-        st.session_state.pop("question", None)
+        for key in ["question", "exam_state", "conversation", "exchange_count",
+                    "answer_method", "evaluation", "sheet_logged"]:
+            st.session_state.pop(key, None)
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -303,7 +420,9 @@ settings_changed = (
     or st.session_state.get("active_style") != selected_style
 )
 if settings_changed:
-    st.session_state.pop("question", None)
+    for key in ["question", "exam_state", "conversation", "exchange_count",
+                "answer_method", "evaluation", "sheet_logged"]:
+        st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
     st.session_state["active_style"] = selected_style
@@ -313,164 +432,223 @@ if settings_changed:
 if "question" not in st.session_state:
     with st.spinner("Loading question..."):
         try:
-            st.session_state["question"] = generate_question(client, selected_topic, selected_style)
+            st.session_state["question"] = start_examination(client, selected_topic, selected_style)
         except Exception as e:
             st.error(f"❌ Failed to generate question: {str(e)}")
             st.stop()
 
 question = st.session_state["question"]
-st.write(f"**Prompt:** {question}")
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# FEATURE 2: Rubric Transparency
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-st.info(
-    "**Scoring Rubric** — your answer will be evaluated on:\n\n"
-    "- **Conceptual Accuracy** — are the chemical principles correct?\n"
-    "- **Reasoning Quality** — do you explain *why*, not just *what*?\n"
-    "- **Correct Terminology** — are terms used precisely and appropriately?\n"
-    "- **Addressing the Question** — does your answer directly respond to what was asked?\n\n"
-    "Answers are scored out of 10 by an AI evaluator using these four dimensions."
-)
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# FEATURE 3: Typed Fallback Answer
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 attempt = st.session_state.get("attempt_counter", 0)
+exam_state = st.session_state.get("exam_state", "not_started")
 
-answer_method = st.radio(
-    "How would you like to submit your answer?",
-    options=["Record audio", "Type my answer"],
-    horizontal=True,
-    key=f"answer_method_{attempt}",
-)
-answer_method_logged = "audio" if answer_method == "Record audio" else "typed"
-transcript_text = None
 
-if answer_method == "Record audio":
-    audio_bytes = st.audio_input("Record your answer:", key=f"audio_input_{attempt}")
+# ── UI helpers ────────────────────────────────────────────────────────────────
 
-    if audio_bytes:
-        # --- 2. TRANSCRIPTION: AssemblyAI ---
-        with st.spinner("Transcribing audio..."):
-            temp_audio_path = "temp_audio.wav"
-            try:
-                with open(temp_audio_path, "wb") as f:
-                    f.write(audio_bytes.getbuffer())
-                transcriber = aai.Transcriber()
-                transcript = transcriber.transcribe(
-                    temp_audio_path,
-                    config=aai.TranscriptionConfig(
-                        language_code="en",
-                        speech_models=["universal-2"],
-                        entity_detection=True,
-                    ),
-                )
-                transcript_text = transcript.text
-                st.success("✓ Audio transcribed successfully")
-            except Exception as e:
-                st.error(f"❌ Transcription failed: {str(e)}")
-                st.stop()
-            finally:
-                if os.path.exists(temp_audio_path):
-                    try:
-                        os.remove(temp_audio_path)
-                    except Exception as cleanup_err:
-                        st.warning(f"⚠ Could not delete temp file: {cleanup_err}")
-
-else:
-    typed_answer = st.text_area(
-        "Type your answer here:",
-        height=200,
-        placeholder="Write your full answer to the question above...",
-        key=f"typed_answer_{attempt}",
-    )
-    if st.button("Submit typed answer"):
-        if not typed_answer.strip():
-            st.error("Please write an answer before submitting.")
-        else:
-            transcript_text = typed_answer.strip()
-            st.success("✓ Typed answer received")
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# EVALUATION — runs for both audio and typed paths once transcript_text is set
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if transcript_text:
-
-    # --- FEATURE 4: Audit Log ---
-    audit_log = (
-        f"[AUDIT LOG]\n"
-        f"Student: {student_name} | ID: {student_id}\n"
-        f"Timestamp: {exam_timestamp}\n"
-        f"Topic: {selected_topic} | Style: {selected_style}\n"
-        f"Question: {question}\n"
-        f"Answer method: {answer_method_logged}\n"
-        f"---\n"
-        f"TRANSCRIPT:\n"
-        f"{transcript_text}"
-    )
-
-    # --- 3. EVALUATION: LLM Structured Output (using OpenAI o3-mini) ---
-    with st.spinner("Evaluating conceptual accuracy..."):
-        system_prompt = (
-            f'You are a general chemistry evaluator. The student was asked: "{question}"\n\n'
-            "Read their transcript and evaluate how accurately and completely they answered the question.\n\n"
-            "You MUST respond in valid JSON format with exactly three keys:\n"
-            '- "Score" (integer out of 10)\n'
-            '- "Feedback" (string, 1-2 sentences)\n'
-            '- "Misconceptions_Flagged" (boolean)\n\n'
-            "Respond with ONLY the JSON object, no additional text."
+def _transcribe_audio(audio_bytes) -> str | None:
+    """Transcribe audio bytes via AssemblyAI. Returns text or None on failure."""
+    temp_audio_path = "temp_audio.wav"
+    try:
+        with open(temp_audio_path, "wb") as f:
+            f.write(audio_bytes.getbuffer())
+        transcriber = aai.Transcriber()
+        result = transcriber.transcribe(
+            temp_audio_path,
+            config=aai.TranscriptionConfig(
+                language_code="en",
+                speech_models=["universal-2"],
+                entity_detection=True,
+            ),
         )
+        return result.text
+    except Exception as e:
+        st.error(f"❌ Transcription failed: {str(e)}")
+        return None
+    finally:
+        if os.path.exists(temp_audio_path):
+            try:
+                os.remove(temp_audio_path)
+            except Exception:
+                pass
 
-        try:
-            response = client.chat.completions.create(
-                model="o3-mini",
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Transcript: {audit_log}"},
-                ],
-                timeout=60.0,
-            )
 
-            evaluation = json.loads(response.choices[0].message.content)
-            st.success("✓ Evaluation complete")
+def _render_conversation(conversation: list, answer_method: str):
+    """Render the full conversation thread as chat bubbles."""
+    for turn in conversation:
+        if turn["role"] == "examiner":
+            with st.chat_message("assistant", avatar="🎓"):
+                st.write(turn["content"])
+        else:
+            avatar = "🎤" if answer_method == "audio" else "✍️"
+            with st.chat_message("user", avatar=avatar):
+                st.write(turn["content"])
 
-            score          = evaluation.get("Score", "N/A")
-            feedback       = evaluation.get("Feedback", "No feedback available")
-            misconceptions = evaluation.get("Misconceptions_Flagged", False)
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Score", f"{score}/10")
-            with col2:
-                st.metric("Misconceptions?", "Yes" if misconceptions else "No")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# EXAM STATE MACHINE
+# States: "not_started" → "in_progress" → "complete"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            st.subheader("📋 Feedback")
-            st.info(feedback)
+# ── State: not_started ────────────────────────────────────────────────────────
+if exam_state == "not_started":
+    st.write(f"**Opening Question:** {question}")
 
-            with st.expander("View full evaluation JSON"):
-                st.json(evaluation)
+    st.info(
+        "**How this exam works**\n\n"
+        f"You will have **{MAX_EXCHANGES} exchanges** with an AI oral examiner. "
+        "The examiner will adapt follow-up questions based on your responses — "
+        "going deeper if you're strong, or probing foundational concepts if you need support. "
+        "You may ask the examiner to clarify the question; you will not be penalized for this. "
+        "Your final score reflects your understanding across the full conversation.\n\n"
+        "**Scoring considers:** conceptual accuracy · reasoning quality · correct terminology · trajectory of improvement"
+    )
 
-            with st.expander("View transcript"):
-                st.text(transcript_text)
+    answer_mode = st.radio(
+        "How would you like to answer throughout the exam?",
+        options=["Record audio", "Type my answers"],
+        horizontal=True,
+        key=f"mode_{attempt}",
+    )
 
-            # --- FEATURE 5: Google Sheets Logging ---
-            append_to_sheet([
-                exam_timestamp,
-                student_name,
-                student_id,
-                selected_topic,
-                selected_style,
-                question,
-                answer_method_logged,
-                transcript_text,
-                score,
-                feedback,
-                str(misconceptions),
-            ])
+    if st.button("Begin Exam", type="primary", key=f"begin_{attempt}"):
+        st.session_state["answer_method"] = "audio" if answer_mode == "Record audio" else "typed"
+        st.session_state["conversation"] = [{"role": "examiner", "content": question}]
+        st.session_state["exchange_count"] = 0
+        st.session_state["exam_state"] = "in_progress"
+        st.rerun()
 
-        except json.JSONDecodeError as e:
-            st.error(f"❌ Invalid JSON response from API: {str(e)}")
-        except Exception as e:
-            st.error(f"❌ Evaluation failed: {str(e)}")
+# ── State: in_progress ────────────────────────────────────────────────────────
+elif exam_state == "in_progress":
+    conversation   = st.session_state["conversation"]
+    exchange_count = st.session_state["exchange_count"]
+    answer_method  = st.session_state["answer_method"]
+
+    st.progress(
+        exchange_count / MAX_EXCHANGES,
+        text=f"Exchange {exchange_count + 1} of {MAX_EXCHANGES}",
+    )
+
+    _render_conversation(conversation, answer_method)
+
+    transcript_text = None
+
+    if answer_method == "audio":
+        audio_bytes = st.audio_input(
+            "Record your response:", key=f"audio_{attempt}_{exchange_count}"
+        )
+        if audio_bytes:
+            with st.spinner("Transcribing audio..."):
+                transcript_text = _transcribe_audio(audio_bytes)
+    else:
+        typed = st.text_area(
+            "Your response:",
+            height=150,
+            placeholder="Type your response to the examiner's question...",
+            key=f"typed_{attempt}_{exchange_count}",
+        )
+        if st.button("Submit", key=f"submit_{attempt}_{exchange_count}"):
+            if not typed.strip():
+                st.error("Please write a response before submitting.")
+            else:
+                transcript_text = typed.strip()
+
+    if transcript_text:
+        conversation.append({"role": "student", "content": transcript_text})
+        new_count = exchange_count + 1
+
+        if new_count < MAX_EXCHANGES:
+            with st.spinner("Examiner is thinking..."):
+                try:
+                    follow_up = get_examiner_response(
+                        client, conversation, new_count, TOPICS[selected_topic]
+                    )
+                    conversation.append({"role": "examiner", "content": follow_up})
+                except Exception as e:
+                    st.error(f"❌ Failed to get examiner response: {str(e)}")
+                    st.stop()
+            st.session_state["conversation"] = conversation
+            st.session_state["exchange_count"] = new_count
+            st.rerun()
+        else:
+            # Final student turn — grade the full conversation
+            st.session_state["conversation"] = conversation
+            st.session_state["exchange_count"] = new_count
+            with st.spinner("Evaluating your performance across all exchanges..."):
+                try:
+                    evaluation = grade_conversation(
+                        client, conversation, selected_topic, selected_style, question
+                    )
+                    st.session_state["evaluation"] = evaluation
+                    st.session_state["exam_state"] = "complete"
+                    st.rerun()
+                except json.JSONDecodeError as e:
+                    st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Evaluation failed: {str(e)}")
+
+# ── State: complete ───────────────────────────────────────────────────────────
+elif exam_state == "complete":
+    conversation  = st.session_state["conversation"]
+    evaluation    = st.session_state["evaluation"]
+    answer_method = st.session_state["answer_method"]
+
+    _render_conversation(conversation, answer_method)
+
+    st.divider()
+    st.subheader("Examination Complete")
+
+    score          = evaluation.get("Score", "N/A")
+    feedback       = evaluation.get("Feedback", "No feedback available.")
+    misconceptions = evaluation.get("Misconceptions_Flagged", False)
+    trajectory     = evaluation.get("Trajectory", "N/A")
+
+    TRAJECTORY_LABELS = {
+        "improving":         "Improving",
+        "consistent_strong": "Consistently Strong",
+        "consistent_weak":   "Consistently Weak",
+        "declining":         "Declining",
+        "mixed":             "Mixed",
+    }
+    trajectory_display = TRAJECTORY_LABELS.get(trajectory, trajectory)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Score", f"{score}/10")
+    with col2:
+        st.metric("Trajectory", trajectory_display)
+    with col3:
+        st.metric("Misconceptions?", "Yes" if misconceptions else "No")
+
+    st.subheader("Feedback")
+    st.info(feedback)
+
+    with st.expander("View full conversation transcript"):
+        for turn in conversation:
+            label = "Examiner" if turn["role"] == "examiner" else "You"
+            st.markdown(f"**{label}:** {turn['content']}")
+            st.write("")
+
+    with st.expander("View full evaluation JSON"):
+        st.json(evaluation)
+
+    # ── Google Sheets logging (once per completed exam) ───────────────────────
+    if not st.session_state.get("sheet_logged"):
+        formatted_transcript = "\n\n".join(
+            f"[{'Examiner' if t['role'] == 'examiner' else 'Student'}]: {t['content']}"
+            for t in conversation
+        )
+        answer_method_logged = f"dialogue-{answer_method}"
+        append_to_sheet([
+            exam_timestamp,
+            student_name,
+            student_id,
+            selected_topic,
+            selected_style,
+            question,
+            answer_method_logged,
+            formatted_transcript,
+            score,
+            feedback,
+            str(misconceptions),
+            trajectory,
+        ])
+        st.session_state["sheet_logged"] = True
