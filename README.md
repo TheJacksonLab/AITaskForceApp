@@ -4,9 +4,10 @@
 
 ## Features
 - 🎤 Audio recording with cloud-based **AssemblyAI** transcription
-- 🤖 AI evaluation powered by **OpenAI o3-mini** (fast, affordable)
-- 📊 Real-time feedback and conceptual accuracy scoring
+- 🤖 Dynamic 6-turn oral dialogue powered by **OpenAI gpt-4o-mini** (examiner) + **o3-mini** (final grading)
+- 📊 Holistic scoring with trajectory tracking (improving / consistent strong / consistent weak / declining / mixed)
 - 🌐 Hosted on Streamlit Cloud for easy sharing
+- 📋 Results logged to Google Sheets for instructor review
 
 ## Quick Start (Local Development)
 
@@ -63,9 +64,20 @@ Once deployed:
 
 Your app is now live! Share the URL with colleagues. 🎉
 
-## Cost Estimate
-- **AssemblyAI:** ~$0.00-0.10 per minute of audio (free tier: 600 min/month)
-- **OpenAI o3-mini:** Very cheap (~$0.001-0.05 per request)
+## Cost Estimate (per completed exam)
+
+Each exam consists of up to **6 student turns**, generating up to **7 OpenAI API calls** total (1 question generation + 5 examiner follow-ups + 1 final grading).
+
+| Service | Usage per exam | Estimated cost |
+|---------|---------------|----------------|
+| **OpenAI gpt-4o-mini** | Opening question + up to 5 examiner follow-ups | ~$0.001–0.003 |
+| **OpenAI o3-mini** | 1 final holistic grading call (full transcript) | ~$0.01–0.02 |
+| **AssemblyAI** | Up to 6 audio responses (~4–5 min total audio) | ~$0.02–0.03 |
+| **Total** | | **~$0.03–0.05 per exam** |
+
+Free tiers:
+- **AssemblyAI:** 100 hours/month free — covers ~1,200 exams/month
+- **OpenAI:** No persistent free tier; pre-purchase credits at [platform.openai.com](https://platform.openai.com)
 
 ## Differences from Local Version
 - **This version:** Cloud-hosted, shareable, uses cloud APIs
