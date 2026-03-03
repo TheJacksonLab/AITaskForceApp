@@ -386,6 +386,7 @@ with st.sidebar:
         for key in ["question", "exam_state", "conversation", "exchange_count",
                     "answer_method", "evaluation", "sheet_logged"]:
             st.session_state.pop(key, None)
+        st.session_state["question_requested"] = True
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -421,7 +422,7 @@ settings_changed = (
 )
 if settings_changed:
     for key in ["question", "exam_state", "conversation", "exchange_count",
-                "answer_method", "evaluation", "sheet_logged"]:
+                "answer_method", "evaluation", "sheet_logged", "question_requested"]:
         st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
@@ -430,12 +431,20 @@ if settings_changed:
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 if "question" not in st.session_state:
-    with st.spinner("Loading question..."):
-        try:
-            st.session_state["question"] = start_examination(client, selected_topic, selected_style)
-        except Exception as e:
-            st.error(f"❌ Failed to generate question: {str(e)}")
-            st.stop()
+    if st.session_state.get("question_requested"):
+        with st.spinner("Generating question..."):
+            try:
+                st.session_state["question"] = start_examination(client, selected_topic, selected_style)
+                st.session_state.pop("question_requested", None)
+            except Exception as e:
+                st.error(f"❌ Failed to generate question: {str(e)}")
+                st.stop()
+    else:
+        st.info(
+            "Select a topic and question style in the sidebar, "
+            "then click **New Question** to generate your opening question."
+        )
+        st.stop()
 
 question = st.session_state["question"]
 attempt = st.session_state.get("attempt_counter", 0)
