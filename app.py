@@ -280,7 +280,7 @@ def start_examination(client, topic: str, style: str) -> str:
     else:
         style_instruction = QUESTION_STYLES[style]
     response = client.chat.completions.create(
-        model="o3-mini",
+        model="gpt-4o-mini",
         messages=[{
             "role": "user",
             "content": (
@@ -320,7 +320,7 @@ def get_examiner_response(
         else:
             messages.append({"role": "user", "content": turn["content"]})
     response = client.chat.completions.create(
-        model="o3-mini",
+        model="gpt-4o-mini",
         messages=messages,
         timeout=45.0,
     )
