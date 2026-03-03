@@ -555,23 +555,23 @@ elif exam_state == "in_progress":
         conversation.append({"role": "student", "content": transcript_text})
         new_count = exchange_count + 1
 
-        if new_count < MAX_EXCHANGES:
-            with st.spinner("Examiner is thinking..."):
-                try:
-                    follow_up = get_examiner_response(
-                        client, conversation, new_count, TOPICS[selected_topic]
-                    )
-                    conversation.append({"role": "examiner", "content": follow_up})
-                except Exception as e:
-                    st.error(f"❌ Failed to get examiner response: {str(e)}")
-                    st.stop()
-            st.session_state["conversation"] = conversation
-            st.session_state["exchange_count"] = new_count
-            st.rerun()
-        else:
-            # Final student turn — grade the full conversation
-            st.session_state["conversation"] = conversation
-            st.session_state["exchange_count"] = new_count
+        # Always get the examiner's response — on the final turn the FINAL TURN RULE
+        # in the system prompt causes it to close the exam warmly instead of asking again.
+        with st.spinner("Examiner is thinking..."):
+            try:
+                follow_up = get_examiner_response(
+                    client, conversation, new_count, TOPICS[selected_topic]
+                )
+                conversation.append({"role": "examiner", "content": follow_up})
+            except Exception as e:
+                st.error(f"❌ Failed to get examiner response: {str(e)}")
+                st.stop()
+
+        st.session_state["conversation"] = conversation
+        st.session_state["exchange_count"] = new_count
+
+        if new_count >= MAX_EXCHANGES:
+            # All exchanges done — grade the full conversation immediately
             with st.spinner("Evaluating your performance across all exchanges..."):
                 try:
                     evaluation = grade_conversation(
@@ -579,11 +579,12 @@ elif exam_state == "in_progress":
                     )
                     st.session_state["evaluation"] = evaluation
                     st.session_state["exam_state"] = "complete"
-                    st.rerun()
                 except json.JSONDecodeError as e:
                     st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
                 except Exception as e:
                     st.error(f"❌ Evaluation failed: {str(e)}")
+
+        st.rerun()
 
 # ── State: complete ───────────────────────────────────────────────────────────
 elif exam_state == "complete":
