@@ -3,6 +3,7 @@ from openai import OpenAI
 import assemblyai as aai
 import json
 import os
+import re
 import random
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -91,8 +92,8 @@ def append_to_sheet(row: list):
     """
     Append a single row to the Google Sheet.
     Failures warn but never call st.stop() — logging must not break the exam.
-    Row order: timestamp, student_name, student_id, topic, style, question,
-               answer_method, transcript, score, feedback, misconceptions_flagged
+    Row order: timestamp, student_name, student_id, topic, subtopic, question,
+               answer_method, transcript, score, feedback, misconceptions_flagged, trajectory
     """
     try:
         gc = get_gspread_client()
@@ -102,7 +103,7 @@ def append_to_sheet(row: list):
         worksheet = sh.sheet1
         if worksheet.row_count == 0 or worksheet.acell("A1").value is None:
             headers = [
-                "timestamp", "student_name", "student_id", "topic", "style",
+                "timestamp", "student_name", "student_id", "topic", "subtopic",
                 "question", "answer_method", "transcript", "score",
                 "feedback", "misconceptions_flagged", "trajectory",
             ]
@@ -114,20 +115,53 @@ def append_to_sheet(row: list):
         st.warning(f"⚠ Failed to write to Google Sheets: {e}")
 
 
-# ── Topic and style definitions ───────────────────────────────────────────────
-TOPICS = {
-    "Random (any topic)": (
-        "Pick a random topic from the following course syllabus: "
-        "stoichiometry (limiting reagents, percent yield, solution stoichiometry); "
-        "gases (ideal gas law, gas mixtures, kinetic molecular theory, real gases and van der Waals equation); "
-        "chemical equilibrium (equilibrium expressions, Le Chatelier's principle, Kp vs Kc); "
-        "energy and enthalpy (heat transfer, Hess's law, calorimetry, bond enthalpies); "
-        "thermodynamics (entropy, Gibbs free energy, spontaneity, thermodynamic vs kinetic control); "
-        "periodic table trends (atomic radius, ionization energy, electronegativity, electron affinity); "
-        "chemical bonding and Lewis structures (ionic vs covalent, formal charge, resonance); "
-        "VSEPR, molecular geometry, polarity, and intermolecular forces; "
-        "chemical kinetics (rate laws, reaction order, Arrhenius equation, reaction mechanisms, catalysis)."
-    ),
+# ── Question bank ─────────────────────────────────────────────────────────────
+def _load_question_bank() -> dict[str, list[str]]:
+    """Parse oral_exam_questions_list.txt into {subtopic: [question_texts]}."""
+    bank: dict[str, list[str]] = {}
+    current_topic: str | None = None
+    topic_order = [
+        "Stoichiometry",
+        "Gases",
+        "Chemical Equilibrium",
+        "Energy & Enthalpy",
+        "Thermodynamics",
+        "Periodic Table Trends",
+        "Chemical Bonding & Lewis Structures",
+        "VSEPR, Polarity & IMFs",
+        "Chemical Kinetics",
+        "Acids and Bases",
+    ]
+    q_re = re.compile(r"^\d+\.\s+(.+)")
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "oral_exam_questions_list.txt")
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        st.error("❌ oral_exam_questions_list.txt not found. Please add it to the app directory.")
+        return {}
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for topic in topic_order:
+            if topic in stripped and not q_re.match(stripped):
+                current_topic = topic
+                if current_topic not in bank:
+                    bank[current_topic] = []
+                break
+        if current_topic:
+            m = q_re.match(stripped)
+            if m:
+                bank[current_topic].append(m.group(1).strip())
+    return bank
+
+
+QUESTION_BANK = _load_question_bank()
+
+SUBTOPICS = ["Random (any topic)"] + list(QUESTION_BANK.keys())
+
+TOPIC_INSTRUCTIONS = {
     "Stoichiometry": "Focus on stoichiometry: limiting reagents, percent yield, and solution stoichiometry.",
     "Gases": "Focus on gases: ideal gas law, gas mixtures, kinetic molecular theory, real gases, and the van der Waals equation.",
     "Chemical Equilibrium": "Focus on chemical equilibrium: equilibrium expressions, Le Chatelier's principle, and Kp vs Kc.",
@@ -137,95 +171,7 @@ TOPICS = {
     "Chemical Bonding & Lewis Structures": "Focus on chemical bonding and Lewis structures: ionic vs covalent bonding, formal charge, and resonance.",
     "VSEPR, Polarity & IMFs": "Focus on VSEPR theory, molecular geometry, polarity, and intermolecular forces.",
     "Chemical Kinetics": "Focus on chemical kinetics: rate laws, reaction order, the Arrhenius equation, reaction mechanisms, and catalysis.",
-}
-
-REAL_WORLD_DOMAINS = [
-    "smartphone lithium-ion batteries overheating in a pocket",
-    "SPF ratings in sunscreen and UV protection",
-    "PFAS 'forever chemicals' detected in drinking water",
-    "microplastics accumulating in the ocean",
-    "wildfire smoke and air quality index",
-    "electric vehicle battery range dropping in cold weather",
-    "tattoo ink fading and breaking down under skin",
-    "energy drink ingredients (caffeine, taurine, B vitamins) and the body",
-    "teeth whitening strips and enamel",
-    "skincare actives — retinol, niacinamide, AHAs — and skin pH",
-    "vaping aerosol chemistry and lung exposure",
-    "Ozempic / GLP-1 receptor agonists and metabolism",
-    "protein powder supplements and nitrogen content",
-    "glow sticks at concerts — chemiluminescence",
-    "OLED screens on phones and electroluminescence",
-    "concrete cracking in bridges and chemical weathering",
-    "car airbag sodium azide rapid decomposition",
-    "pool chlorination and disinfection byproducts",
-    "dry ice sublimation in shipping packages",
-    "wine or beer fermentation gone wrong — off-flavors and spoilage",
-    "fast fashion synthetic dyes polluting rivers",
-    "solar panel semiconductor chemistry and the photoelectric effect",
-    "reusable water bottle BPA leaching",
-    "carbon dating ancient artifacts",
-    "mRNA vaccine cold-chain storage requirements",
-    "antibiotic resistance and bacterial cell membranes",
-    "hand sanitizer alcohol chemistry and why concentration matters",
-    "sunburn and UV-induced DNA damage",
-    "contact lens oxygen permeability and polymer chemistry",
-    "composting and the chemistry of organic decomposition",
-    "food dye stability in acidic vs. basic drinks",
-    "nicotine patches and transdermal drug delivery",
-    "rust on a bike left outside — electrochemical corrosion",
-    "the Maillard reaction when toasting bread or searing meat",
-    "acetaminophen (Tylenol) overdose and liver chemistry",
-]
-
-QUESTION_STYLES = {
-    "Random (any style)": (
-        "Choose randomly from these question styles: "
-        "a real-world scenario the student must explain chemically; "
-        "a 'predict and explain' question where a variable changes and the student reasons through the outcome; "
-        "a troubleshooting scenario where something unexpected happened and the student diagnoses why; "
-        "or a compare-and-contrast between two systems, conditions, or substances."
-    ),
-    "Real-world scenario": (
-        "Frame the question around this specific real-world context: {domain}. "
-        "Describe one brief, concrete observation from that context that a college student in 2025 would recognize, "
-        "then ask the student to explain the underlying chemistry."
-    ),
-    "Predict & explain": (
-        "Ask the student to predict what happens when one variable changes in a real, relatable system, and explain why. "
-        "Ground the scenario in something a college student might actually encounter or read about — "
-        "for example: what happens to a lithium battery's performance in winter cold, "
-        "how a sports drink's electrolyte concentration affects hydration, "
-        "what changing pH does to a skincare product's effectiveness, "
-        "how adding more catalyst affects a reaction rate in a drug synthesis, "
-        "what happens to solubility when you heat a carbonated drink, "
-        "how atmospheric CO2 concentration affects ocean pH over time, "
-        "or what happens to enzyme activity when body temperature rises during a fever. "
-        "Use stems like 'What would happen if...', 'How would X change if Y increases...', or 'A researcher finds that...'."
-    ),
-    "Troubleshoot": (
-        "Describe a specific situation where something went wrong or gave a surprising result, "
-        "grounded in a context a college student would find plausible and interesting. "
-        "Draw from settings like: a campus lab experiment, a pharmaceutical manufacturing plant, "
-        "a water treatment facility detecting contamination, an EV battery pack failing unexpectedly, "
-        "a food scientist noticing unexpected spoilage, a climate researcher seeing unexpected data, "
-        "a cosmetics chemist whose product separated on the shelf, "
-        "or an athlete's supplement causing an unexpected reaction. "
-        "Ask the student to diagnose the chemical reason behind the unexpected result. "
-        "Use stems like 'A student ran an experiment and noticed...', 'A batch of product unexpectedly failed...', "
-        "or 'A researcher observed something surprising when...'."
-    ),
-    "Compare & contrast": (
-        "Ask the student to compare two related substances, conditions, or processes that both appear in the real world. "
-        "Choose pairs that are adjacent in chemistry but meaningfully different, and connect them to something tangible — for example: "
-        "why a lithium-ion vs. alkaline battery behaves differently under load, "
-        "how polar vs. nonpolar sunscreen ingredients interact with skin differently, "
-        "why strong vs. weak acids feel different on contact, "
-        "how endothermic vs. exothermic hand warmers work, "
-        "why ionic vs. covalent compounds have such different melting points, "
-        "how a catalyst vs. an inhibitor changes a drug's shelf life, "
-        "or why CO2 vs. N2 behaves differently when dissolved in a beverage. "
-        "Ask the student to explain what drives the chemical difference in behavior."
-    ),
+    "Acids and Bases": "Focus on acids and bases: properties, definitions, acid-base equilibria, buffers, and titrations.",
 }
 
 
@@ -272,36 +218,20 @@ Return ONLY your examiner response — no labels, no preamble, no meta-commentar
 """
 
 
-def start_examination(client, topic: str, style: str) -> str:
-    topic_instruction = TOPICS[topic]
-    if style == "Real-world scenario":
-        domain = random.choice(REAL_WORLD_DOMAINS)
-        style_instruction = QUESTION_STYLES[style].format(domain=domain)
+def start_examination(topic: str) -> tuple[str, str]:
+    """Sample an opening question from the question bank.
+
+    Returns (question_text, resolved_topic) — resolved_topic is the actual
+    subtopic used even when 'Random (any topic)' was selected.
+    """
+    if topic == "Random (any topic)":
+        resolved_topic = random.choice(list(QUESTION_BANK.keys()))
     else:
-        style_instruction = QUESTION_STYLES[style]
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{
-            "role": "user",
-            "content": (
-                "Generate a single opening question for a dynamic oral examination in an undergraduate "
-                "general chemistry course (Chemistry 202). "
-                f"{topic_instruction} "
-                f"{style_instruction} "
-                "The opening question should be moderately challenging — harder than a simple recall "
-                "question, requiring the student to reason through a concept or explain a relationship, "
-                "not just recite a definition. It should be accessible to a well-prepared student but "
-                "push them to demonstrate deeper understanding. "
-                "Avoid multi-part questions and questions that require strong quantitative calculation. "
-                "Keep the question to 1-2 sentences. "
-                "Be creative and specific — avoid generic or overused textbook examples. "
-                "Do NOT use question stems like 'Define', 'List', 'State', or 'What is the formula for'. "
-                "Return ONLY the question text, no preamble, topic label, or style label."
-            )
-        }],
-        timeout=30.0
-    )
-    return response.choices[0].message.content.strip()
+        resolved_topic = topic
+    questions = QUESTION_BANK.get(resolved_topic, [])
+    if not questions:
+        raise ValueError(f"No questions found for subtopic: {resolved_topic}")
+    return random.choice(questions), resolved_topic
 
 
 def get_examiner_response(
@@ -328,7 +258,7 @@ def get_examiner_response(
 
 
 def grade_conversation(
-    client, conversation: list, topic: str, style: str, opening_question: str
+    client, conversation: list, topic: str, opening_question: str
 ) -> dict:
     """Holistically grade the full examination transcript."""
     lines = []
@@ -339,7 +269,7 @@ def grade_conversation(
 
     system_prompt = (
         f"You are a general chemistry professor grading a complete oral examination.\n\n"
-        f"TOPIC: {topic} | STYLE: {style}\n"
+        f"TOPIC: {topic}\n"
         f"OPENING QUESTION: {opening_question}\n\n"
         "GRADING PHILOSOPHY:\n"
         "- Evaluate the student's understanding across the ENTIRE conversation, not just their first response.\n"
@@ -377,14 +307,13 @@ def grade_conversation(
 st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
 st.title("Oral Exam Test for CHEM202 - AITaskForce")
 
-# ── Sidebar: Topic Pinning & Question Style ───────────────────────────────────
+# ── Sidebar: Subtopic selection ───────────────────────────────────────────────
 with st.sidebar:
     st.header("Question Settings")
-    selected_topic = st.selectbox("Topic", options=list(TOPICS.keys()), index=0)
-    selected_style = st.selectbox("Question style", options=list(QUESTION_STYLES.keys()), index=0)
+    selected_topic = st.selectbox("Subtopic", options=SUBTOPICS, index=0)
     if st.button("New Question"):
         for key in ["question", "exam_state", "conversation", "exchange_count",
-                    "answer_method", "evaluation", "sheet_logged"]:
+                    "answer_method", "evaluation", "sheet_logged", "resolved_topic"]:
             st.session_state.pop(key, None)
         st.session_state["question_requested"] = True
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
@@ -416,39 +345,39 @@ exam_timestamp = st.session_state["exam_timestamp"]
 st.caption(f"Logged in as: **{student_name}** | ID: {student_id} | ☁️ Cloud Version")
 
 # ── Question caching ──────────────────────────────────────────────────────────
-settings_changed = (
-    st.session_state.get("active_topic") != selected_topic
-    or st.session_state.get("active_style") != selected_style
-)
+settings_changed = st.session_state.get("active_topic") != selected_topic
 if settings_changed:
     for key in ["question", "exam_state", "conversation", "exchange_count",
-                "answer_method", "evaluation", "sheet_logged", "question_requested"]:
+                "answer_method", "evaluation", "sheet_logged", "question_requested",
+                "resolved_topic"]:
         st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
-    st.session_state["active_style"] = selected_style
-    if was_initialized:  # Don't increment on initial page load, only on actual topic/style changes
+    if was_initialized:  # Don't increment on initial page load, only on actual topic changes
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
 
 if "question" not in st.session_state:
     if st.session_state.get("question_requested"):
-        with st.spinner("Generating question..."):
+        with st.spinner("Loading question..."):
             try:
-                st.session_state["question"] = start_examination(client, selected_topic, selected_style)
+                question, resolved_topic = start_examination(selected_topic)
+                st.session_state["question"] = question
+                st.session_state["resolved_topic"] = resolved_topic
                 st.session_state.pop("question_requested", None)
             except Exception as e:
-                st.error(f"❌ Failed to generate question: {str(e)}")
+                st.error(f"❌ Failed to load question: {str(e)}")
                 st.stop()
     else:
         st.info(
-            "Select a topic and question style in the sidebar, "
-            "then click **New Question** to generate your opening question."
+            "Select a subtopic in the sidebar, "
+            "then click **New Question** to load your opening question."
         )
         st.stop()
 
-question = st.session_state["question"]
-attempt = st.session_state.get("attempt_counter", 0)
-exam_state = st.session_state.get("exam_state", "not_started")
+question        = st.session_state["question"]
+resolved_topic  = st.session_state.get("resolved_topic", selected_topic)
+attempt         = st.session_state.get("attempt_counter", 0)
+exam_state      = st.session_state.get("exam_state", "not_started")
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
@@ -569,7 +498,8 @@ elif exam_state == "in_progress":
         with st.spinner("Examiner is thinking..."):
             try:
                 follow_up = get_examiner_response(
-                    client, conversation, new_count, TOPICS[selected_topic]
+                    client, conversation, new_count,
+                    TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic)
                 )
                 conversation.append({"role": "examiner", "content": follow_up})
             except Exception as e:
@@ -584,7 +514,7 @@ elif exam_state == "in_progress":
             with st.spinner("Evaluating your performance across all exchanges..."):
                 try:
                     evaluation = grade_conversation(
-                        client, conversation, selected_topic, selected_style, question
+                        client, conversation, resolved_topic, question
                     )
                     st.session_state["evaluation"] = evaluation
                     st.session_state["exam_state"] = "complete"
@@ -652,7 +582,7 @@ elif exam_state == "complete":
             student_name,
             student_id,
             selected_topic,
-            selected_style,
+            resolved_topic,
             question,
             answer_method_logged,
             formatted_transcript,
