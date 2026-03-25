@@ -257,6 +257,50 @@ def get_examiner_response(
     return response.choices[0].message.content.strip()
 
 
+def generate_improvement_advice(
+    client, conversation: list, topic: str, evaluation: dict
+) -> str:
+    """Generate personalized, friendly improvement advice based on exam performance."""
+    lines = []
+    for turn in conversation:
+        label = "Examiner" if turn["role"] == "examiner" else "Student"
+        lines.append(f"[{label}]: {turn['content']}")
+    transcript = "\n\n".join(lines)
+
+    score = evaluation.get("Score", 5)
+    trajectory = evaluation.get("Trajectory", "mixed")
+    feedback = evaluation.get("Feedback", "")
+    misconceptions = evaluation.get("Misconceptions_Flagged", False)
+
+    system_prompt = (
+        "You are a supportive and encouraging chemistry professor giving personalized study advice "
+        "to a student who just completed an oral exam.\n\n"
+        f"TOPIC: {topic}\n"
+        f"SCORE: {score}/10\n"
+        f"TRAJECTORY: {trajectory}\n"
+        f"MISCONCEPTIONS FLAGGED: {misconceptions}\n"
+        f"GRADER FEEDBACK: {feedback}\n\n"
+        "TASK: Based on the full exam transcript and the grading results above, write a short, "
+        "warm, and targeted recommendation for what this student should study or practice to improve. "
+        "Be specific — reference the actual concepts or areas where they struggled in the exam. "
+        "If they scored 9 or 10, genuinely congratulate them, but still point to one concept or "
+        "deeper aspect of the topic they could explore to truly master it. "
+        "Keep it to 3-5 sentences. Be friendly and encouraging — like advice from a professor "
+        "who genuinely wants the student to succeed. "
+        "Do not repeat the score back to them. Just give the advice directly."
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"TRANSCRIPT:\n\n{transcript}"},
+        ],
+        timeout=45.0,
+    )
+    return response.choices[0].message.content.strip()
+
+
 def grade_conversation(
     client, conversation: list, topic: str, opening_question: str
 ) -> dict:
@@ -313,7 +357,8 @@ with st.sidebar:
     selected_topic = st.selectbox("Subtopic", options=SUBTOPICS, index=0)
     if st.button("New Question"):
         for key in ["question", "exam_state", "conversation", "exchange_count",
-                    "answer_method", "evaluation", "sheet_logged", "resolved_topic"]:
+                    "answer_method", "evaluation", "sheet_logged", "resolved_topic",
+                    "improvement_advice"]:
             st.session_state.pop(key, None)
         st.session_state["question_requested"] = True
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
@@ -349,7 +394,7 @@ settings_changed = st.session_state.get("active_topic") != selected_topic
 if settings_changed:
     for key in ["question", "exam_state", "conversation", "exchange_count",
                 "answer_method", "evaluation", "sheet_logged", "question_requested",
-                "resolved_topic"]:
+                "resolved_topic", "improvement_advice"]:
         st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
@@ -541,34 +586,28 @@ elif exam_state == "complete":
     misconceptions = evaluation.get("Misconceptions_Flagged", False)
     trajectory     = evaluation.get("Trajectory", "N/A")
 
-    TRAJECTORY_LABELS = {
-        "improving":         "Improving",
-        "consistent_strong": "Consistently Strong",
-        "consistent_weak":   "Consistently Weak",
-        "declining":         "Declining",
-        "mixed":             "Mixed",
-    }
-    trajectory_display = TRAJECTORY_LABELS.get(trajectory, trajectory)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Score", f"{score}/10")
-    with col2:
-        st.metric("Trajectory", trajectory_display)
-    with col3:
-        st.metric("Misconceptions?", "Yes" if misconceptions else "No")
-
     st.subheader("Feedback")
     st.info(feedback)
+
+    # Generate and display personalized improvement recommendations
+    if "improvement_advice" not in st.session_state:
+        with st.spinner("Generating personalized study recommendations..."):
+            try:
+                advice = generate_improvement_advice(client, conversation, resolved_topic, evaluation)
+                st.session_state["improvement_advice"] = advice
+            except Exception as e:
+                st.session_state["improvement_advice"] = None
+
+    advice = st.session_state.get("improvement_advice")
+    if advice:
+        st.subheader("Study Recommendations")
+        st.success(advice)
 
     with st.expander("View full conversation transcript"):
         for turn in conversation:
             label = "Examiner" if turn["role"] == "examiner" else "You"
             st.markdown(f"**{label}:** {turn['content']}")
             st.write("")
-
-    with st.expander("View full evaluation JSON"):
-        st.json(evaluation)
 
     # ── Google Sheets logging (once per completed exam) ───────────────────────
     if not st.session_state.get("sheet_logged"):
