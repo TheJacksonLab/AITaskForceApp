@@ -25,7 +25,7 @@ def _get_secret(key: str):
 openai_api_key     = _get_secret("OPENAI_API_KEY")
 assemblyai_api_key = _get_secret("ASSEMBLYAI_API_KEY")
 google_creds_str   = _get_secret("GOOGLE_SHEETS_CREDENTIALS")
-google_sheet_name  = _get_secret("GOOGLE_SHEET_NAME") or "CHEM202_OralExam_Submissions"
+google_sheet_name  = _get_secret("GOOGLE_SHEET_NAME") or "ChemViva_OralExam_Submissions"
 
 if not openai_api_key:
     st.error("❌ OPENAI_API_KEY not found. Please set it in Streamlit secrets or .env file.")
@@ -464,8 +464,18 @@ def grade_conversation(
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Oral Exam Test for CHEM202 - AITaskForce", layout="wide")
-st.title("Oral Exam Test for CHEM202 - AITaskForce")
+st.set_page_config(page_title="ChemViva", layout="wide")
+st.markdown("""
+<div style='text-align:center; padding: 0.5rem 0 1.2rem 0;'>
+  <span style='font-size:3em; font-weight:900; letter-spacing:-1px;
+               background: linear-gradient(90deg, #E84A27 0%, #13294B 100%);
+               -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+               background-clip: text;'>⚗️ ChemViva</span>
+  <p style='color:#555; font-size:1.05em; margin-top:0.2em;'>
+      AI-Powered Oral Chemistry Examinations · University of Illinois
+  </p>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Sidebar: Subtopic selection ───────────────────────────────────────────────
 with st.sidebar:

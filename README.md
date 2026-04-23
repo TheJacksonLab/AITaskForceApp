@@ -1,6 +1,6 @@
-# Oral Exam: General Chemistry - Cloud Version
+# ChemViva
 
-**Shareable AI-powered chemistry oral exam evaluator. Deploy online and share with your colleagues.**
+**AI-powered oral chemistry exam platform for the University of Illinois. Deploy online and share with your colleagues.**
 
 ## Features
 - 🎤 Audio recording with cloud-based **AssemblyAI** transcription

@@ -1,5 +1,5 @@
 """
-Instructor Dashboard — CHEM202 Oral Exam
+ChemViva — Instructor Dashboard
 Standalone Streamlit page. Does NOT import from app.py.
 """
 
@@ -22,7 +22,7 @@ def _get_secret(key: str):
 
 INSTRUCTOR_PASSWORD = _get_secret("INSTRUCTOR_PASSWORD") or ""
 GOOGLE_CREDS_STR    = _get_secret("GOOGLE_SHEETS_CREDENTIALS") or ""
-GOOGLE_SHEET_NAME   = _get_secret("GOOGLE_SHEET_NAME") or "CHEM202_OralExam_Submissions"
+GOOGLE_SHEET_NAME   = _get_secret("GOOGLE_SHEET_NAME") or "ChemViva_OralExam_Submissions"
 
 SHEET_COLUMNS = [
     "timestamp", "student_name", "student_id", "topic", "style",
@@ -32,8 +32,16 @@ SHEET_COLUMNS = [
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Instructor Dashboard — CHEM202", layout="wide")
-st.title("Instructor Dashboard — CHEM202")
+st.set_page_config(page_title="ChemViva — Instructor Dashboard", layout="wide")
+st.markdown("""
+<div style='text-align:center; padding: 0.5rem 0 1.2rem 0;'>
+  <span style='font-size:2.5em; font-weight:900; letter-spacing:-1px;
+               background: linear-gradient(90deg, #E84A27 0%, #13294B 100%);
+               -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+               background-clip: text;'>⚗️ ChemViva</span>
+  <p style='color:#555; font-size:1.05em; margin-top:0.2em;'>Instructor Dashboard</p>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ── Password Gate ─────────────────────────────────────────────────────────────
