@@ -1,0 +1,16 @@
+{
+  "max_exchanges": 6,
+  "course_name": "CHEM 202",
+  "enabled_topics": [
+    "Stoichiometry",
+    "Gases",
+    "Chemical Equilibrium",
+    "Energy & Enthalpy",
+    "Thermodynamics",
+    "Periodic Table Trends",
+    "Chemical Bonding & Lewis Structures",
+    "VSEPR, Polarity & IMFs",
+    "Chemical Kinetics",
+    "Acids and Bases"
+  ]
+}

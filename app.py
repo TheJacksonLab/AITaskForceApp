@@ -14,6 +14,17 @@ from google.oauth2.service_account import Credentials
 load_dotenv()
 
 
+def _load_config() -> dict:
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    try:
+        with open(config_path, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+CONFIG = _load_config()
+
+
 # ── Secret resolution: prefer st.secrets (Streamlit Cloud), fall back to env ──
 def _get_secret(key: str):
     try:
@@ -159,7 +170,8 @@ def _load_question_bank() -> dict[str, list[str]]:
 
 QUESTION_BANK = _load_question_bank()
 
-SUBTOPICS = ["Random (any topic)"] + list(QUESTION_BANK.keys())
+_enabled_topics = CONFIG.get("enabled_topics", list(QUESTION_BANK.keys()))
+SUBTOPICS = ["Random (any topic)"] + [t for t in _enabled_topics if t in QUESTION_BANK]
 
 TOPIC_INSTRUCTIONS = {
     "Stoichiometry": "Focus on stoichiometry: limiting reagents, percent yield, and solution stoichiometry.",
@@ -175,7 +187,7 @@ TOPIC_INSTRUCTIONS = {
 }
 
 
-MAX_EXCHANGES = 6  # number of student response turns before grading is triggered
+MAX_EXCHANGES = CONFIG.get("max_exchanges", 6)
 
 EXAMINER_SYSTEM_PROMPT = """\
 You are an oral examiner for an undergraduate general chemistry course (CHEM202).
@@ -463,6 +475,40 @@ def grade_conversation(
     return json.loads(response.choices[0].message.content)
 
 
+def annotate_transcript(client, conversation: list, topic: str, evaluation: dict) -> list:
+    """Return per-student-turn quality annotations for the post-exam review."""
+    student_turns = [t for t in conversation if t["role"] == "student"]
+    if not student_turns:
+        return []
+    lines = []
+    for turn in conversation:
+        label = "Examiner" if turn["role"] == "examiner" else "Student"
+        lines.append(f"[{label}]: {turn['content']}")
+    transcript = "\n\n".join(lines)
+    system_prompt = (
+        f"You are reviewing a chemistry oral exam transcript. Topic: {topic}. "
+        f"Overall score: {evaluation.get('Score', '?')}/10.\n\n"
+        f"Assess each of the {len(student_turns)} student responses.\n"
+        "Return JSON: "
+        '{"annotations": [{"exchange": 1, "quality": "strong|partial|weak|misconception", "note": "one specific sentence"}]}\n'
+        f"Return exactly {len(student_turns)} annotations. ONLY the JSON object."
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"TRANSCRIPT:\n\n{transcript}"},
+            ],
+            timeout=30.0,
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result.get("annotations", [])
+    except Exception:
+        return []
+
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="ChemViva", layout="wide")
 st.markdown("""
@@ -484,7 +530,7 @@ with st.sidebar:
     if st.button("New Question"):
         for key in ["question", "exam_state", "conversation", "exchange_count",
                     "answer_method", "evaluation", "sheet_logged", "resolved_topic",
-                    "improvement_advice"]:
+                    "improvement_advice", "turn_annotations"]:
             st.session_state.pop(key, None)
         st.session_state["question_requested"] = True
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
@@ -520,7 +566,7 @@ settings_changed = st.session_state.get("active_topic") != selected_topic
 if settings_changed:
     for key in ["question", "exam_state", "conversation", "exchange_count",
                 "answer_method", "evaluation", "sheet_logged", "question_requested",
-                "resolved_topic", "improvement_advice"]:
+                "resolved_topic", "improvement_advice", "turn_annotations"]:
         st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
@@ -590,6 +636,38 @@ def _render_conversation(conversation: list, answer_method: str):
             avatar = "🎤" if answer_method == "audio" else "✍️"
             with st.chat_message("user", avatar=avatar):
                 st.write(turn["content"])
+
+
+def _render_annotated_transcript(conversation: list, annotations: list):
+    """Render conversation with inline quality badges on each student turn."""
+    _COLOR = {
+        "strong":       ("#28a745", "✓ Strong"),
+        "partial":      ("#e07b00", "◐ Partial"),
+        "weak":         ("#dc3545", "✗ Weak"),
+        "misconception":("#6f42c1", "⚠ Misconception"),
+    }
+    ann_map = {a["exchange"]: a for a in annotations}
+    student_turn = 0
+    for turn in conversation:
+        if turn["role"] == "examiner":
+            with st.chat_message("assistant", avatar="🎓"):
+                st.write(turn["content"])
+        else:
+            student_turn += 1
+            with st.chat_message("user", avatar="✍️"):
+                st.write(turn["content"])
+                ann = ann_map.get(student_turn)
+                if ann:
+                    quality = ann.get("quality", "")
+                    note    = ann.get("note", "")
+                    color, label = _COLOR.get(quality, ("#6c757d", quality.capitalize()))
+                    st.markdown(
+                        f'<span style="display:inline-block;padding:2px 10px;border-radius:4px;'
+                        f'background:{color}22;border:1px solid {color};color:{color};'
+                        f'font-size:0.82em;font-weight:600;">{label}</span>'
+                        f'&nbsp;<span style="font-size:0.85em;color:#555;">{note}</span>',
+                        unsafe_allow_html=True,
+                    )
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -695,7 +773,17 @@ elif exam_state == "complete":
     evaluation    = st.session_state["evaluation"]
     answer_method = st.session_state["answer_method"]
 
-    _render_conversation(conversation, answer_method)
+    if "turn_annotations" not in st.session_state:
+        with st.spinner("Reviewing your responses..."):
+            st.session_state["turn_annotations"] = annotate_transcript(
+                client, conversation, resolved_topic, evaluation
+            )
+
+    annotations = st.session_state.get("turn_annotations", [])
+    if annotations:
+        _render_annotated_transcript(conversation, annotations)
+    else:
+        _render_conversation(conversation, answer_method)
 
     st.divider()
     st.subheader("Examination Complete")
@@ -721,12 +809,6 @@ elif exam_state == "complete":
     if advice:
         st.subheader("Study Recommendations")
         st.success(advice)
-
-    with st.expander("View full conversation transcript"):
-        for turn in conversation:
-            label = "Examiner" if turn["role"] == "examiner" else "You"
-            st.markdown(f"**{label}:** {turn['content']}")
-            st.write("")
 
     # ── Google Sheets logging (once per completed exam) ───────────────────────
     if not st.session_state.get("sheet_logged"):

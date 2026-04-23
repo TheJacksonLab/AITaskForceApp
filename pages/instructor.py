@@ -122,8 +122,33 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
+    st.divider()
+    st.markdown("**Exam Configuration**")
+    try:
+        import json as _json
+        _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json")
+        with open(_cfg_path) as _f:
+            _cfg = _json.load(_f)
+        st.caption(f"Exchanges per exam: {_cfg.get('max_exchanges', 6)}")
+        st.caption(f"Course: {_cfg.get('course_name', '—')}")
+        _topics = _cfg.get("enabled_topics", [])
+        st.caption(f"Active topics: {len(_topics)}")
+        with st.expander("Show topics"):
+            for t in _topics:
+                st.caption(f"• {t}")
+        st.caption("Edit `config.json` in the repo to change these values.")
+    except Exception:
+        st.caption("config.json not found — using defaults.")
+
 filtered_df = df[df["topic"].isin(selected_topics)] if selected_topics else df
 
+
+# ── Weak topic alert ──────────────────────────────────────────────────────────
+_topic_avgs = filtered_df.groupby("topic")["score"].mean()
+_weak = _topic_avgs[_topic_avgs < 6].sort_values()
+if not _weak.empty:
+    _weak_str = " · ".join(f"**{t}** ({v:.1f}/10)" for t, v in _weak.items())
+    st.warning(f"⚠️ **Weak Topics** (class avg below 6): {_weak_str}")
 
 # ── Section 1: Summary Metrics ────────────────────────────────────────────────
 st.subheader("Summary")
@@ -165,7 +190,22 @@ st.dataframe(avg_score, use_container_width=True)
 st.bar_chart(avg_score.set_index("topic")["Average Score"])
 
 
-# ── Section 4: Misconception Rate by Topic ────────────────────────────────────
+# ── Section 4: Trajectory Distribution by Topic ───────────────────────────────
+st.subheader("Trajectory Distribution by Topic")
+if "trajectory" in filtered_df.columns:
+    traj_df = (
+        filtered_df.groupby(["topic", "trajectory"])
+        .size()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+    traj_order = ["consistent_strong", "improving", "mixed", "declining", "consistent_weak"]
+    ordered_cols = ["topic"] + [c for c in traj_order if c in traj_df.columns]
+    st.dataframe(traj_df[ordered_cols], use_container_width=True)
+else:
+    st.info("Trajectory data not available.")
+
+# ── Section 6: Misconception Rate by Topic ────────────────────────────────────
 st.subheader("Misconception Rate by Topic")
 misc_rate_df = (
     filtered_df.groupby("topic")["misconceptions_flagged"]
@@ -181,7 +221,7 @@ st.dataframe(misc_rate_df, use_container_width=True)
 st.bar_chart(misc_rate_df.set_index("topic")["Misconception Rate (%)"])
 
 
-# ── Section 5: CSV Export ─────────────────────────────────────────────────────
+# ── Section 7: CSV Export ─────────────────────────────────────────────────────
 st.subheader("Export Data")
 csv_bytes = filtered_df.to_csv(index=False).encode("utf-8")
 st.download_button(
