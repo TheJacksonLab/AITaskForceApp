@@ -611,15 +611,8 @@ if exam_state == "not_started":
         "**Scoring considers:** conceptual accuracy · reasoning quality · correct terminology · trajectory of improvement"
     )
 
-    answer_mode = st.radio(
-        "How would you like to answer throughout the exam?",
-        options=["Record audio", "Type my answers"],
-        horizontal=True,
-        key=f"mode_{attempt}",
-    )
-
     if st.button("Begin Exam", type="primary", key=f"begin_{attempt}"):
-        st.session_state["answer_method"] = "audio" if answer_mode == "Record audio" else "typed"
+        st.session_state["answer_method"] = "typed"
         st.session_state["conversation"] = [{"role": "examiner", "content": question}]
         st.session_state["exchange_count"] = 0
         st.session_state["exam_state"] = "in_progress"
