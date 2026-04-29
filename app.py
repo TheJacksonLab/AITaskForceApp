@@ -620,22 +620,26 @@ def _get_question_structures(question_text: str) -> list[dict]:
                 {
                     "role": "system",
                     "content": (
-                        "You are a chemistry assistant. Identify the 1-2 most important "
-                        "molecular compounds in this chemistry question that a student "
-                        "would benefit from seeing as a 2D structural diagram. "
-                        'Return JSON: {"molecules": ["retinol", "caffeine"]}. '
+                        "You are a chemistry assistant. Identify ALL small molecules "
+                        "mentioned or implied in this chemistry question whose 2D structure "
+                        "would help a student understand the chemistry being asked about. "
+                        "Include every distinct named compound, substrate, product, or "
+                        "reactant that appears in the question — for example, if a question "
+                        "involves nicotine binding to acetylcholine receptors, return both "
+                        "nicotine and acetylcholine. Return up to 3 molecules. "
+                        'Return JSON: {"molecules": ["nicotine", "acetylcholine"]}. '
                         "Use the exact common or IUPAC name that PubChem would recognise. "
                         "Exclude: simple salts (NaCl), binary metal oxides (Fe2O3), bare "
-                        "ions, noble gases, and anything without a meaningful 2D organic "
-                        "or coordination structure. If no suitable molecule exists, return "
-                        '{"molecules": []}.'
+                        "ions, noble gases, proteins, receptors, and anything without a "
+                        "well-defined small-molecule 2D structure. If no suitable molecule "
+                        'exists, return {"molecules": []}.'
                     ),
                 },
                 {"role": "user", "content": question_text},
             ],
             timeout=10.0,
         )
-        names = json.loads(resp.choices[0].message.content).get("molecules", [])[:2]
+        names = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
     except Exception:
         names = []
     structures = []
