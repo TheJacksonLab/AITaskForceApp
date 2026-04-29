@@ -755,9 +755,8 @@ if exam_state == "not_started":
         f"You will have **{MAX_EXCHANGES} exchanges** with an AI oral examiner. "
         "The examiner will adapt follow-up questions based on your responses — "
         "going deeper if you're strong, or probing foundational concepts if you need support. "
-        "You may ask the examiner to clarify the question; you will not be penalized for this. "
-        "Your final score reflects your understanding across the full conversation.\n\n"
-        "**Scoring considers:** conceptual accuracy · reasoning quality · correct terminology · trajectory of improvement"
+        "You may ask the examiner to clarify the question; you will not be penalized for this.\n\n"
+        "**Assessed on:** conceptual accuracy · reasoning quality · correct terminology · trajectory of improvement"
     )
 
     if st.button("Begin Exam", type="primary", key=f"begin_{attempt}"):
