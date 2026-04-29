@@ -35,8 +35,6 @@ At constant volume and constant moles of gas, pressure is directly proportional 
 Opening the cap suddenly lowers the pressure above the liquid; the dissolved CO₂ is now supersaturated relative to the new, lower equilibrium solubility, so it rapidly escapes as gas bubbles (Henry’s law).
 15. Distillers sometimes reduce the pressure inside a still to separate ethanol from water at a lower temperature — why does lowering the external pressure allow a liquid to boil at a cooler temperature?
 A liquid boils when its vapor pressure equals the external pressure; reducing the external pressure means a lower vapor pressure (and therefore a lower temperature) is needed to reach that threshold.
-16. A vape device heats liquid near a coil at roughly 250 °C, and the user inhales the resulting vapor into lungs at about 37 °C — why would the volume occupied by that vapor change dramatically between the coil and the lungs?
-At constant pressure, the volume of a gas is directly proportional to absolute temperature (Charles’s law); cooling from ~523 K to ~310 K reduces the volume by roughly 40%.
 17. In a car engine, the fuel–air mixture is rapidly compressed before ignition — why does the kinetic molecular theory (KMT) predict that compressing the gas into a smaller volume raises its temperature?
 Rapid adiabatic compression forces molecules closer together and increases the frequency and force of collisions with the moving piston; this work transfers kinetic energy to the gas molecules, raising the average molecular kinetic energy and therefore the temperature.
 18. A swelling lithium-ion battery produces gases internally — why does the kinetic molecular theory (KMT) predict that the trapped gas molecules strike the battery casing harder and more frequently as the battery gets hotter?
@@ -153,7 +151,7 @@ The polar C–Cl bonds introduce permanent dipoles along the polymer chain; thes
 In a coordinate bond, both electrons in the shared pair come from a single atom (the nitrogen lone pair donating into an empty Fe orbital), rather than one electron from each atom as in a standard covalent bond.
 69. When iron rusts, Fe atoms lose electrons to form Fe²⁺ or Fe³⁺ ions that combine with oxide and hydroxide ions — why is the bonding in the resulting iron oxide better described as ionic rather than covalent?
 The large electronegativity difference between iron and oxygen means electrons are effectively transferred rather than shared; the resulting electrostatic attraction between Fe²⁺ cations and O²⁻ anions constitutes ionic bonding.
-70. Drawing a Lewis structure for CF₄ shows four bonding pairs arranged symmetrically around carbon — why does the large electronegativity difference between C and F mean that each bonding pair is pulled strongly toward fluorine, despite the molecule being classified as covalent?
+70. Drawing a Lewis structure for CF₄ shows four bonding pairs arranged symmetrically around carbon — why does the large electronegativity difference between C and F mean that each bonding pair is pulled strongly toward fluorine, despite the molecule being classified as nonpolar?
 A Lewis structure shows shared pairs as lines between atoms, but it does not convey how unevenly those electrons are distributed; the high electronegativity of F shifts the electron density in each bond heavily toward fluorine, giving each bond a large bond dipole.
 VSEPR, Polarity & IMFs
 Molecular geometry, polarity, intermolecular forces
