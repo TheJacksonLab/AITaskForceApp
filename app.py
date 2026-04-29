@@ -5,8 +5,6 @@ import json
 import os
 import re
 import random
-import urllib.request
-import urllib.parse
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -608,8 +606,17 @@ except ImportError:
     _RDKIT_AVAILABLE = False
 
 
-def _extract_molecule_names(question_text: str) -> list[str]:
-    """Ask the LLM for the 1-2 most useful molecules to visualize from a question."""
+def _get_question_structures(question_text: str) -> list[dict]:
+    """
+    Return [{name, image}] for the key molecules in a question.
+    The LLM provides both names and SMILES in one call; RDKit validates and
+    renders locally. Cached in session_state so the call only runs once per question.
+    """
+    if not _RDKIT_AVAILABLE:
+        return []
+    cache_key = f"structures_{hash(question_text)}"
+    if cache_key in st.session_state:
+        return st.session_state[cache_key]
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -618,56 +625,29 @@ def _extract_molecule_names(question_text: str) -> list[str]:
                 {
                     "role": "system",
                     "content": (
-                        "You are a chemistry assistant. Extract the 1-2 most important "
-                        "molecular compounds from this chemistry question that a student "
+                        "You are a chemistry assistant. Identify the 1-2 most important "
+                        "molecular compounds in this chemistry question that a student "
                         "would benefit from seeing as a 2D structural diagram. "
-                        "Return JSON: {\"molecules\": [\"name\", ...]}. "
-                        "Use common chemical names (e.g. 'glucose', 'ethanol', 'caffeine'). "
+                        "For each compound, provide its name and a valid SMILES string. "
+                        'Return JSON: {"molecules": [{"name": "retinol", "smiles": "..."}, ...]}. '
                         "Exclude: simple salts (NaCl), binary metal oxides (Fe2O3), bare "
                         "ions, noble gases, and anything without a meaningful 2D organic "
                         "or coordination structure. If no suitable molecule exists, return "
-                        "{\"molecules\": []}."
+                        '{"molecules": []}.'
                     ),
                 },
                 {"role": "user", "content": question_text},
             ],
             timeout=10.0,
         )
-        return json.loads(resp.choices[0].message.content).get("molecules", [])[:2]
+        entries = json.loads(resp.choices[0].message.content).get("molecules", [])[:2]
     except Exception:
-        return []
-
-
-def _fetch_smiles(name: str) -> str | None:
-    """Fetch canonical SMILES for a compound name from the PubChem REST API."""
-    try:
-        encoded = urllib.parse.quote(name)
-        url = (
-            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
-            f"{encoded}/property/IsomericSMILES/JSON"
-        )
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            data = json.loads(resp.read())
-        return data["PropertyTable"]["Properties"][0]["IsomericSMILES"]
-    except Exception:
-        return None
-
-
-def _get_question_structures(question_text: str) -> list[dict]:
-    """
-    Return [{name, image}] for the key molecules in a question.
-    Cached in session_state so API calls only run once per question.
-    """
-    if not _RDKIT_AVAILABLE:
-        return []
-    cache_key = f"structures_{hash(question_text)}"
-    if cache_key in st.session_state:
-        return st.session_state[cache_key]
-    names = _extract_molecule_names(question_text)
+        entries = []
     structures = []
-    for name in names:
-        smiles = _fetch_smiles(name)
-        if not smiles:
+    for entry in entries:
+        smiles = entry.get("smiles", "")
+        name = entry.get("name", "")
+        if not smiles or not name:
             continue
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
