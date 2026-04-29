@@ -620,18 +620,20 @@ def _get_question_structures(question_text: str) -> list[dict]:
                 {
                     "role": "system",
                     "content": (
-                        "You are a chemistry assistant. Identify ALL small molecules "
-                        "mentioned or implied in this chemistry question whose 2D structure "
-                        "would help a student understand the chemistry being asked about. "
-                        "Include every distinct named compound, substrate, product, or "
-                        "reactant — for example, if a question involves nicotine binding "
-                        "to acetylcholine receptors, return both nicotine and acetylcholine. "
-                        "Return up to 3 molecules, each with a correct SMILES string. "
+                        "You are a chemistry assistant. Identify ALL named small molecules "
+                        "in this chemistry question whose 2D structure would help a student "
+                        "understand the chemistry being discussed. Include every distinct "
+                        "named compound, substrate, product, or reactant — for example, "
+                        "if a question involves nicotine binding to acetylcholine receptors, "
+                        "return both nicotine and acetylcholine. Return up to 3 molecules, "
+                        "each with a correct SMILES string. "
                         'Return JSON: {"molecules": [{"name": "ethanol", "smiles": "CCO"}, ...]}. '
-                        "Exclude: simple salts (NaCl), binary metal oxides (Fe2O3), bare "
-                        "ions, noble gases, proteins, receptors, and anything without a "
-                        "well-defined small-molecule 2D structure. If no suitable molecule "
-                        'exists, return {"molecules": []}.'
+                        "Exclude anything that does NOT have a meaningful multi-atom 2D "
+                        "structural diagram: bare atoms (Cl, Na), radicals (Cl•, OH•), "
+                        "simple ions (Cl⁻, Na⁺), noble gases, simple salts (NaCl), binary "
+                        "metal oxides (Fe2O3), polymers with no defined repeat unit, "
+                        "proteins, enzymes, and receptors. If no suitable molecule exists, "
+                        'return {"molecules": []}.'
                     ),
                 },
                 {"role": "user", "content": question_text},
@@ -649,7 +651,7 @@ def _get_question_structures(question_text: str) -> list[dict]:
             continue
         try:
             encoded = urllib.parse.quote(smiles)
-            url = f"https://cactus.nci.nih.gov/chemical/structure/{encoded}/image?width=500&height=500&format=png"
+            url = f"https://www.simolecule.com/cdkdepict/depict/bow/png?smi={encoded}&zoom=4&w=500&h=500"
             with urllib.request.urlopen(url, timeout=8) as r:
                 image_bytes = r.read()
             structures.append({"name": name, "image_bytes": image_bytes})
