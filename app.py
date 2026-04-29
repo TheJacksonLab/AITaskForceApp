@@ -649,7 +649,7 @@ def _get_question_structures(question_text: str) -> list[dict]:
             continue
         try:
             encoded = urllib.parse.quote(smiles)
-            url = f"https://cactus.nci.nih.gov/chemical/structure/{encoded}/image"
+            url = f"https://cactus.nci.nih.gov/chemical/structure/{encoded}/image?width=500&height=500&format=png"
             with urllib.request.urlopen(url, timeout=8) as r:
                 image_bytes = r.read()
             structures.append({"name": name, "image_bytes": image_bytes})
