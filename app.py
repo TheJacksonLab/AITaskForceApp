@@ -645,7 +645,8 @@ def _get_question_structures(question_text: str) -> list[dict]:
             timeout=10.0,
         )
         entries = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
-    except Exception:
+    except Exception as e:
+        st.caption(f"Structure LLM error: {e}")
         entries = []
     structures = []
     for entry in entries:
@@ -744,9 +745,11 @@ def _render_annotated_transcript(conversation: list, annotations: list):
 if exam_state == "not_started":
     st.write(f"**Opening Question:** {question}")
 
+    st.caption(f"🔬 Structure renderer: {'rdkit ready' if _RDKIT_AVAILABLE else 'rdkit not available'}")
     if _RDKIT_AVAILABLE:
         with st.spinner("Loading molecular structures..."):
             structures = _get_question_structures(question)
+        st.caption(f"Molecules found: {[s['name'] for s in structures]}")
         if structures:
             st.markdown("**Reference structures:**")
             cols = st.columns(len(structures))
