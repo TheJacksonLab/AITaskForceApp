@@ -623,17 +623,21 @@ def _get_question_structures(question_text: str) -> list[dict]:
                         "You are a chemistry assistant. Identify ALL named small molecules "
                         "in this chemistry question whose 2D structure would help a student "
                         "understand the chemistry being discussed. Include every distinct "
-                        "named compound, substrate, product, or reactant — for example, "
-                        "if a question involves nicotine binding to acetylcholine receptors, "
-                        "return both nicotine and acetylcholine. Return up to 3 molecules, "
+                        "named drug, substrate, product, or reactant — for example, if a "
+                        "question involves β-lactamase cleaving penicillin, return penicillin "
+                        "(the small molecule drug), NOT β-lactamase (a protein). "
+                        "If a question involves nicotine binding to acetylcholine receptors, "
+                        "return both nicotine AND acetylcholine. Return up to 3 molecules, "
                         "each with a correct SMILES string. "
-                        'Return JSON: {"molecules": [{"name": "ethanol", "smiles": "CCO"}, ...]}. '
-                        "Exclude anything that does NOT have a meaningful multi-atom 2D "
-                        "structural diagram: bare atoms (Cl, Na), radicals (Cl•, OH•), "
-                        "simple ions (Cl⁻, Na⁺), noble gases, simple salts (NaCl), binary "
-                        "metal oxides (Fe2O3), polymers with no defined repeat unit, "
-                        "proteins, enzymes, and receptors. If no suitable molecule exists, "
-                        'return {"molecules": []}.'
+                        'Return JSON: {"molecules": [{"name": "penicillin G", "smiles": "..."}, ...]}. '
+                        "STRICT EXCLUSIONS — never include these, even if named in the question: "
+                        "enzymes (β-lactamase, pepsin, etc.), proteins, receptors, antibodies, "
+                        "bare atoms (Cl, Na), radicals (Cl•, OH•), simple ions (Cl⁻, Na⁺), "
+                        "noble gases, simple binary salts (NaCl), binary metal oxides (Fe₂O₃), "
+                        "polymers with no defined repeat unit. "
+                        "Before returning, check: is each entry a small organic molecule with "
+                        "a well-defined 2D structure? If not, remove it. "
+                        'If no suitable molecule exists, return {"molecules": []}.'
                     ),
                 },
                 {"role": "user", "content": question_text},
