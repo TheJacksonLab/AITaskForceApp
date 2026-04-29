@@ -5,4 +5,3 @@ assemblyai==0.52.4
 rich==13.7.0
 gspread==6.1.2
 google-auth==2.29.0
-rdkit>=2023.3.1

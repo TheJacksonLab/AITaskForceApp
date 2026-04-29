@@ -598,23 +598,17 @@ exam_state      = st.session_state.get("exam_state", "not_started")
 
 
 # ── Molecular structure rendering ─────────────────────────────────────────────
-try:
-    from rdkit import Chem
-    from rdkit.Chem import Draw
-    _RDKIT_AVAILABLE = True
-except ImportError:
-    _RDKIT_AVAILABLE = False
+import urllib.request
+import urllib.parse
 
 
 def _get_question_structures(question_text: str) -> list[dict]:
     """
-    Return [{name, image}] for the key molecules in a question.
-    The LLM provides names and SMILES in one call; RDKit validates each SMILES
-    and renders the image locally with no external HTTP dependency.
-    Cached in session_state so the call only runs once per question.
+    Return [{name, image_bytes}] for the key molecules in a question.
+    The LLM provides names and SMILES; NCI Cactus renders the structure image
+    server-side from the SMILES string (no local chemistry packages needed).
+    Cached in session_state so the calls only run once per question.
     """
-    if not _RDKIT_AVAILABLE:
-        return []
     cache_key = f"structures_{hash(question_text)}"
     if cache_key in st.session_state:
         return st.session_state[cache_key]
@@ -645,8 +639,7 @@ def _get_question_structures(question_text: str) -> list[dict]:
             timeout=10.0,
         )
         entries = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
-    except Exception as e:
-        st.caption(f"Structure LLM error: {e}")
+    except Exception:
         entries = []
     structures = []
     for entry in entries:
@@ -654,11 +647,14 @@ def _get_question_structures(question_text: str) -> list[dict]:
         smiles = entry.get("smiles", "")
         if not name or not smiles:
             continue
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            continue
-        img = Draw.MolToImage(mol, size=(260, 260))
-        structures.append({"name": name, "image": img})
+        try:
+            encoded = urllib.parse.quote(smiles)
+            url = f"https://cactus.nci.nih.gov/chemical/structure/{encoded}/image"
+            with urllib.request.urlopen(url, timeout=8) as r:
+                image_bytes = r.read()
+            structures.append({"name": name, "image_bytes": image_bytes})
+        except Exception:
+            pass
     st.session_state[cache_key] = structures
     return structures
 
@@ -745,17 +741,14 @@ def _render_annotated_transcript(conversation: list, annotations: list):
 if exam_state == "not_started":
     st.write(f"**Opening Question:** {question}")
 
-    st.caption(f"🔬 Structure renderer: {'rdkit ready' if _RDKIT_AVAILABLE else 'rdkit not available'}")
-    if _RDKIT_AVAILABLE:
-        with st.spinner("Loading molecular structures..."):
-            structures = _get_question_structures(question)
-        st.caption(f"Molecules found: {[s['name'] for s in structures]}")
-        if structures:
-            st.markdown("**Reference structures:**")
-            cols = st.columns(len(structures))
-            for col, s in zip(cols, structures):
-                with col:
-                    st.image(s["image"], caption=s["name"].capitalize())
+    with st.spinner("Loading molecular structures..."):
+        structures = _get_question_structures(question)
+    if structures:
+        st.markdown("**Reference structures:**")
+        cols = st.columns(len(structures))
+        for col, s in zip(cols, structures):
+            with col:
+                st.image(s["image_bytes"], caption=s["name"].capitalize())
 
     st.info(
         "**How this exam works**\n\n"
