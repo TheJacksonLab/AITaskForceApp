@@ -598,17 +598,23 @@ exam_state      = st.session_state.get("exam_state", "not_started")
 
 
 # ── Molecular structure rendering ─────────────────────────────────────────────
-import urllib.request
-import urllib.parse
+try:
+    from rdkit import Chem
+    from rdkit.Chem import Draw
+    _RDKIT_AVAILABLE = True
+except ImportError:
+    _RDKIT_AVAILABLE = False
 
 
 def _get_question_structures(question_text: str) -> list[dict]:
     """
-    Return [{name, url}] for the key molecules in a question.
-    The LLM extracts molecule names; PubChem serves the PNG images directly.
-    Only URLs that actually resolve (HTTP 200) are returned.
-    Cached in session_state so the calls only run once per question.
+    Return [{name, image}] for the key molecules in a question.
+    The LLM provides names and SMILES in one call; RDKit validates each SMILES
+    and renders the image locally with no external HTTP dependency.
+    Cached in session_state so the call only runs once per question.
     """
+    if not _RDKIT_AVAILABLE:
+        return []
     cache_key = f"structures_{hash(question_text)}"
     if cache_key in st.session_state:
         return st.session_state[cache_key]
@@ -624,11 +630,10 @@ def _get_question_structures(question_text: str) -> list[dict]:
                         "mentioned or implied in this chemistry question whose 2D structure "
                         "would help a student understand the chemistry being asked about. "
                         "Include every distinct named compound, substrate, product, or "
-                        "reactant that appears in the question — for example, if a question "
-                        "involves nicotine binding to acetylcholine receptors, return both "
-                        "nicotine and acetylcholine. Return up to 3 molecules. "
-                        'Return JSON: {"molecules": ["nicotine", "acetylcholine"]}. '
-                        "Use the exact common or IUPAC name that PubChem would recognise. "
+                        "reactant — for example, if a question involves nicotine binding "
+                        "to acetylcholine receptors, return both nicotine and acetylcholine. "
+                        "Return up to 3 molecules, each with a correct SMILES string. "
+                        'Return JSON: {"molecules": [{"name": "ethanol", "smiles": "CCO"}, ...]}. '
                         "Exclude: simple salts (NaCl), binary metal oxides (Fe2O3), bare "
                         "ions, noble gases, proteins, receptors, and anything without a "
                         "well-defined small-molecule 2D structure. If no suitable molecule "
@@ -639,22 +644,20 @@ def _get_question_structures(question_text: str) -> list[dict]:
             ],
             timeout=10.0,
         )
-        names = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
+        entries = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
     except Exception:
-        names = []
+        entries = []
     structures = []
-    for name in names:
-        encoded = urllib.parse.quote(name)
-        url = (
-            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
-            f"{encoded}/PNG?record_type=2d&image_size=300x300"
-        )
-        try:
-            with urllib.request.urlopen(url, timeout=6) as r:
-                if r.status == 200:
-                    structures.append({"name": name, "url": url})
-        except Exception:
-            pass
+    for entry in entries:
+        name = entry.get("name", "")
+        smiles = entry.get("smiles", "")
+        if not name or not smiles:
+            continue
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            continue
+        img = Draw.MolToImage(mol, size=(260, 260))
+        structures.append({"name": name, "image": img})
     st.session_state[cache_key] = structures
     return structures
 
@@ -741,14 +744,15 @@ def _render_annotated_transcript(conversation: list, annotations: list):
 if exam_state == "not_started":
     st.write(f"**Opening Question:** {question}")
 
-    with st.spinner("Loading molecular structures..."):
-        structures = _get_question_structures(question)
-    if structures:
-        st.markdown("**Reference structures:**")
-        cols = st.columns(len(structures))
-        for col, s in zip(cols, structures):
-            with col:
-                st.image(s["url"], caption=s["name"].capitalize())
+    if _RDKIT_AVAILABLE:
+        with st.spinner("Loading molecular structures..."):
+            structures = _get_question_structures(question)
+        if structures:
+            st.markdown("**Reference structures:**")
+            cols = st.columns(len(structures))
+            for col, s in zip(cols, structures):
+                with col:
+                    st.image(s["image"], caption=s["name"].capitalize())
 
     st.info(
         "**How this exam works**\n\n"
