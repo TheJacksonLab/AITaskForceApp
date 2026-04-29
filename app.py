@@ -127,8 +127,12 @@ def append_to_sheet(row: list):
 
 
 # ── Question bank ─────────────────────────────────────────────────────────────
+_QUESTION_NUMBER: dict[str, int] = {}  # question_text → question number (1-100)
+
+
 def _load_question_bank() -> dict[str, list[str]]:
-    """Parse oral_exam_questions_list.txt into {subtopic: [question_texts]}."""
+    """Parse oral_exam_questions_list.txt into {subtopic: [question_texts]}.
+    Also populates _QUESTION_NUMBER so structures can be looked up by number."""
     bank: dict[str, list[str]] = {}
     current_topic: str | None = None
     topic_order = [
@@ -143,7 +147,7 @@ def _load_question_bank() -> dict[str, list[str]]:
         "Chemical Kinetics",
         "Acids and Bases",
     ]
-    q_re = re.compile(r"^\d+\.\s+(.+)")
+    q_re = re.compile(r"^(\d+)\.\s+(.+)")
     try:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "oral_exam_questions_list.txt")
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -164,11 +168,25 @@ def _load_question_bank() -> dict[str, list[str]]:
         if current_topic:
             m = q_re.match(stripped)
             if m:
-                bank[current_topic].append(m.group(1).strip())
+                q_num = int(m.group(1))
+                q_text = m.group(2).strip()
+                bank[current_topic].append(q_text)
+                _QUESTION_NUMBER[q_text] = q_num
     return bank
 
 
+def _load_molecule_map() -> dict[str, list[dict]]:
+    """Load the static molecule map from molecule_map.json."""
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "molecule_map.json")
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 QUESTION_BANK = _load_question_bank()
+MOLECULE_MAP = _load_molecule_map()
 
 _enabled_topics = CONFIG.get("enabled_topics", list(QUESTION_BANK.keys()))
 SUBTOPICS = ["Random (any topic)"] + [t for t in _enabled_topics if t in QUESTION_BANK]
@@ -605,52 +623,18 @@ import urllib.parse
 def _get_question_structures(question_text: str) -> list[dict]:
     """
     Return [{name, image_bytes}] for the key molecules in a question.
-    The LLM provides names and SMILES; NCI Cactus renders the structure image
-    server-side from the SMILES string (no local chemistry packages needed).
-    Cached in session_state so the calls only run once per question.
+    Looks up molecule SMILES from the static molecule_map.json, then fetches
+    rendered PNG images from CDK Depict. Cached in session_state.
     """
     cache_key = f"structures_{hash(question_text)}"
     if cache_key in st.session_state:
         return st.session_state[cache_key]
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a chemistry assistant. Identify ALL named small molecules "
-                        "in this chemistry question whose 2D structure would help a student "
-                        "understand the chemistry being discussed. Include every distinct "
-                        "named drug, substrate, product, or reactant — for example, if a "
-                        "question involves β-lactamase cleaving penicillin, return penicillin "
-                        "(the small molecule drug), NOT β-lactamase (a protein). "
-                        "If a question involves nicotine binding to acetylcholine receptors, "
-                        "return both nicotine AND acetylcholine. Return up to 3 molecules, "
-                        "each with a correct SMILES string. "
-                        'Return JSON: {"molecules": [{"name": "penicillin G", "smiles": "..."}, ...]}. '
-                        "STRICT EXCLUSIONS — never include these, even if named in the question: "
-                        "enzymes (β-lactamase, pepsin, etc.), proteins, receptors, antibodies, "
-                        "bare atoms (Cl, Na), radicals (Cl•, OH•), simple ions (Cl⁻, Na⁺), "
-                        "noble gases, simple binary salts (NaCl), binary metal oxides (Fe₂O₃), "
-                        "polymers with no defined repeat unit. "
-                        "Before returning, check: is each entry a small organic molecule with "
-                        "a well-defined 2D structure? If not, remove it. "
-                        'If no suitable molecule exists, return {"molecules": []}.'
-                    ),
-                },
-                {"role": "user", "content": question_text},
-            ],
-            timeout=10.0,
-        )
-        entries = json.loads(resp.choices[0].message.content).get("molecules", [])[:3]
-    except Exception:
-        entries = []
+    q_num = _QUESTION_NUMBER.get(question_text)
+    molecules = MOLECULE_MAP.get(str(q_num), []) if q_num else []
     structures = []
-    for entry in entries:
-        name = entry.get("name", "")
-        smiles = entry.get("smiles", "")
+    for mol in molecules:
+        name = mol.get("name", "")
+        smiles = mol.get("smiles", "")
         if not name or not smiles:
             continue
         try:
