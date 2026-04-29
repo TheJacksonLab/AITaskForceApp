@@ -5,6 +5,8 @@ import json
 import os
 import re
 import random
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -597,6 +599,85 @@ attempt         = st.session_state.get("attempt_counter", 0)
 exam_state      = st.session_state.get("exam_state", "not_started")
 
 
+# ── Molecular structure rendering ─────────────────────────────────────────────
+try:
+    from rdkit import Chem
+    from rdkit.Chem import Draw
+    _RDKIT_AVAILABLE = True
+except ImportError:
+    _RDKIT_AVAILABLE = False
+
+
+def _extract_molecule_names(question_text: str) -> list[str]:
+    """Ask the LLM for the 1-2 most useful molecules to visualize from a question."""
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a chemistry assistant. Extract the 1-2 most important "
+                        "molecular compounds from this chemistry question that a student "
+                        "would benefit from seeing as a 2D structural diagram. "
+                        "Return JSON: {\"molecules\": [\"name\", ...]}. "
+                        "Use common chemical names (e.g. 'glucose', 'ethanol', 'caffeine'). "
+                        "Exclude: simple salts (NaCl), binary metal oxides (Fe2O3), bare "
+                        "ions, noble gases, and anything without a meaningful 2D organic "
+                        "or coordination structure. If no suitable molecule exists, return "
+                        "{\"molecules\": []}."
+                    ),
+                },
+                {"role": "user", "content": question_text},
+            ],
+            timeout=10.0,
+        )
+        return json.loads(resp.choices[0].message.content).get("molecules", [])[:2]
+    except Exception:
+        return []
+
+
+def _fetch_smiles(name: str) -> str | None:
+    """Fetch canonical SMILES for a compound name from the PubChem REST API."""
+    try:
+        encoded = urllib.parse.quote(name)
+        url = (
+            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
+            f"{encoded}/property/IsomericSMILES/JSON"
+        )
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        return data["PropertyTable"]["Properties"][0]["IsomericSMILES"]
+    except Exception:
+        return None
+
+
+def _get_question_structures(question_text: str) -> list[dict]:
+    """
+    Return [{name, image}] for the key molecules in a question.
+    Cached in session_state so API calls only run once per question.
+    """
+    if not _RDKIT_AVAILABLE:
+        return []
+    cache_key = f"structures_{hash(question_text)}"
+    if cache_key in st.session_state:
+        return st.session_state[cache_key]
+    names = _extract_molecule_names(question_text)
+    structures = []
+    for name in names:
+        smiles = _fetch_smiles(name)
+        if not smiles:
+            continue
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            continue
+        img = Draw.MolToImage(mol, size=(260, 260))
+        structures.append({"name": name, "image": img})
+    st.session_state[cache_key] = structures
+    return structures
+
+
 # ── UI helpers ────────────────────────────────────────────────────────────────
 
 def _transcribe_audio(audio_bytes) -> str | None:
@@ -678,6 +759,16 @@ def _render_annotated_transcript(conversation: list, annotations: list):
 # ── State: not_started ────────────────────────────────────────────────────────
 if exam_state == "not_started":
     st.write(f"**Opening Question:** {question}")
+
+    if _RDKIT_AVAILABLE:
+        with st.spinner("Loading molecular structures..."):
+            structures = _get_question_structures(question)
+        if structures:
+            st.markdown("**Reference structures:**")
+            cols = st.columns(len(structures))
+            for col, s in zip(cols, structures):
+                with col:
+                    st.image(s["image"], caption=s["name"].capitalize())
 
     st.info(
         "**How this exam works**\n\n"
