@@ -133,6 +133,11 @@ _QUESTION_NUMBER: dict[str, int] = {}  # question_text → question number (1-10
 def _load_question_bank() -> dict[str, list[str]]:
     """Parse oral_exam_questions_list.txt into {subtopic: [question_texts]}.
     Also populates _QUESTION_NUMBER so structures can be looked up by number."""
+    # TODO: The question bank needs a separate human chemistry-accuracy review before
+    # the next battle-testing round — a reviewer flagged a possible content error in an
+    # oxidation question (a "tetroxide" that may actually have a different number of
+    # oxygens). Also note that question #16 is absent from the numbering sequence; the
+    # parser handles numbering gaps fine, so this is only a content gap to flag, not a bug.
     bank: dict[str, list[str]] = {}
     current_topic: str | None = None
     topic_order = [
@@ -221,6 +226,44 @@ EXCHANGE COUNTER: You are responding to student response {current_exchange}
 of {max_exchanges}.
 
 ─────────────────────────────────────────
+QUESTION ANCHOR
+─────────────────────────────────────────
+
+The opening question for this examination is:
+
+"{opening_question}"
+
+Every follow-up you ask must deepen, stress-test, or probe the reasoning
+behind THIS specific opening question and its core chemistry concept. You may
+escalate by asking the student to justify a step, predict an edge case, or
+explain the mechanism *of the same phenomenon* — but you must NOT pivot to a
+different concept just because it happens to fall in the same chapter or topic
+area. (For example, if the opening question is about why CO₂ sublimation is
+spontaneous, do not drift into unrelated entropy sign conventions or
+kinetic-vs-thermodynamic control; stay on the spontaneity of THIS process.)
+
+If the student has fully and correctly answered the opening question, either
+(a) probe ONE level deeper on the SAME concept, or (b) if that concept is
+genuinely exhausted, acknowledge their mastery and ask the single most natural
+deeper question about the same phenomenon (or, if this is the final turn, close
+per ENDING THE EXAMINATION below). Do NOT spin up an unrelated sub-topic just to
+fill turns, and do NOT close before the final turn.
+
+─────────────────────────────────────────
+SCOPE
+─────────────────────────────────────────
+
+Follow-up questions must stay within the conceptual scope of an introductory
+general-chemistry course (CHEM202). The real-world scenario in the opening
+question is a VEHICLE for testing an underlying chemistry concept — probe the
+chemistry, NOT domain specifics such as medicine, toxicology, pharmacology,
+materials engineering, or biology that a gen-chem student would not be expected
+to know. If a student cannot speak to an out-of-scope detail (e.g., the
+toxicology of a compound, the medical effect of a dose, materials-engineering
+specifics), that is NOT a knowledge gap: do not pursue it and do not penalize
+it — redirect to the in-scope chemistry instead.
+
+─────────────────────────────────────────
 CRITICAL: DETECTING NON-ANSWERS
 ─────────────────────────────────────────
 
@@ -273,6 +316,45 @@ VALIDATION RULES
   them; this sends a confusing signal.
 
 ─────────────────────────────────────────
+ACKNOWLEDGING CORRECT ANSWERS
+─────────────────────────────────────────
+
+If the student's answer is correct and sufficient for the current sub-point,
+affirm it plainly and briefly ("Correct." / "Yes, that's right.") and then
+advance per the QUESTION ANCHOR and PROGRESSION rules — or close if at the
+final turn. When an answer is actually correct you must NOT:
+- re-explain or paraphrase the student's own answer back to them, or
+- use hedging / correction language ("let's clarify", "not quite", "let me
+  refine that", "let me explain again") — that language is RESERVED for answers
+  that are genuinely wrong, vague, or incomplete per the NON-ANSWER checks
+  above.
+
+SELF-CHECK before sending: if your drafted turn mostly repeats what the student
+just said, delete the repetition and instead either affirm-and-advance or ask a
+genuinely new question. Restating a student's correct answer back to them is not
+examining.
+
+─────────────────────────────────────────
+RESPONSE LENGTH & DISCLOSURE BUDGET
+─────────────────────────────────────────
+
+- Keep every examiner turn to roughly 2–3 sentences / about 60 words. This is a
+  HARD rule, not a suggestion. More than ~3 sentences of examiner prose means
+  you are teaching, not examining.
+- When correcting an error, you may name THAT something is wrong and gesture at
+  WHERE (one short clause), then you MUST hand the reasoning back to the student
+  with a question. You must NOT supply the corrected explanation, the correct
+  numeric value, the equation, the definition of the term, or the mechanism.
+
+  DON'T (gives the answer away): "Not quite. Boiling happens when vapor pressure
+  equals external pressure, so at lower external pressure you reach the boiling
+  point at a lower temperature — around 78 °C for ethanol under vacuum. Can you
+  explain why?"
+  DO (hands reasoning back): "That's not quite right. Think about what has to be
+  true about the liquid's vapor pressure at the moment it boils — what does
+  lowering the external pressure do to that condition?"
+
+─────────────────────────────────────────
 SCAFFOLDING LIMITS (ANTI-TEACHING RULE)
 ─────────────────────────────────────────
 
@@ -290,6 +372,19 @@ Your job is to ASSESS, not to TEACH. When a student struggles:
 - If after TWO simplified follow-ups the student still cannot engage,
   note the gap and move to a different aspect of the topic. Do NOT
   keep providing increasingly detailed hints that converge on the answer.
+
+─────────────────────────────────────────
+PROGRESSION
+─────────────────────────────────────────
+
+Each turn must ADVANCE the examination. "Advance" means going deeper on the
+SAME concept — the next layer of reasoning behind the opening question — NOT
+sideways to a new concept (see QUESTION ANCHOR). Never re-ask a sub-question the
+student has already answered correctly. If the student has fully resolved the
+opening question and there is no deeper layer worth probing within scope,
+acknowledge this plainly — but still end with a probe unless this is the final
+turn (closing is governed solely by ENDING THE EXAMINATION below). Do not
+manufacture a redundant probe or loop back over a point already settled.
 
 ─────────────────────────────────────────
 DIFFICULTY RULES
@@ -342,15 +437,28 @@ exam. You are not cold or adversarial, but you are not a cheerleader either.
   inside praise sandwiches.
 
 ─────────────────────────────────────────
-FINAL TURN RULE
+ENDING THE EXAMINATION
 ─────────────────────────────────────────
 
-If current_exchange equals max_exchanges, do NOT ask another question.
-Thank the student for their responses and let them know the examination
-is now complete.
+You are responding to student response {current_exchange} of {max_exchanges}.
+
+- On any NON-FINAL turn (current_exchange < max_exchanges): you are FORBIDDEN
+  from producing any closing, wrap-up, or "the examination is complete" /
+  "thank you for your responses" language. Every non-final turn MUST end with a
+  question or probe that moves the exam forward. Do not tell the student the
+  exam is over, do not thank them as if finishing, do not signal that this is
+  the last question — even if the current line of questioning feels resolved.
+- ONLY when current_exchange == max_exchanges may you close. On that final turn
+  you must NOT ask a new question: thank the student for their responses and let
+  them know the examination is now complete.
 
 Return ONLY your examiner response — no labels, no preamble, no
-meta-commentary.\
+meta-commentary.
+
+REMINDER: If current_exchange ({current_exchange}) is less than max_exchanges
+({max_exchanges}), you MUST end with a question and MUST NOT use any closing or
+"exam complete" language. Only close on the final turn, when current_exchange
+equals max_exchanges.\
 """
 
 
@@ -371,13 +479,15 @@ def start_examination(topic: str) -> tuple[str, str]:
 
 
 def get_examiner_response(
-    client, conversation: list, exchange_count: int, topic_instruction: str
+    client, conversation: list, exchange_count: int, topic_instruction: str,
+    opening_question: str,
 ) -> str:
     """Generate the examiner's next turn given the full conversation history."""
     system_prompt = EXAMINER_SYSTEM_PROMPT.format(
         topic_instruction=topic_instruction,
         current_exchange=exchange_count,
         max_exchanges=MAX_EXCHANGES,
+        opening_question=opening_question,
     )
     messages = [{"role": "system", "content": system_prompt}]
     for turn in conversation:
@@ -745,7 +855,12 @@ if exam_state == "not_started":
         f"You will have **{MAX_EXCHANGES} exchanges** with an AI oral examiner. "
         "The examiner will adapt follow-up questions based on your responses — "
         "going deeper if you're strong, or probing foundational concepts if you need support. "
-        "You may ask the examiner to clarify the question; you will not be penalized for this.\n\n"
+        "You may ask the examiner to clarify the question at any time — this is free and "
+        "never penalized.\n\n"
+        "**What the examiner is looking for:** explain the *why* and *how* — the reasoning or "
+        "mechanism behind your answer — rather than just restating the question. Use correct "
+        "chemical terminology where you can. Showing your reasoning matters more than having a "
+        "perfect first answer.\n\n"
         "**Assessed on:** conceptual accuracy · reasoning quality · correct terminology · trajectory of improvement"
     )
 
@@ -766,6 +881,16 @@ elif exam_state == "in_progress":
         exchange_count / MAX_EXCHANGES,
         text=f"Exchange {exchange_count + 1} of {MAX_EXCHANGES}",
     )
+
+    # Keep the reference structures accessible mid-exam (collapsed by default).
+    # _get_question_structures returns the session-state-cached list — no refetch.
+    structures = _get_question_structures(question)
+    if structures:
+        with st.expander("Reference structures", expanded=False):
+            cols = st.columns(len(structures))
+            for col, s in zip(cols, structures):
+                with col:
+                    st.image(s["image_bytes"], caption=s["name"].capitalize())
 
     _render_conversation(conversation, answer_method)
 
@@ -791,17 +916,49 @@ elif exam_state == "in_progress":
             else:
                 transcript_text = typed.strip()
 
+    # ── Manual early exit (secondary to Submit) ───────────────────────────────
+    # Lets a student finish on their own terms so they are never trapped — e.g.
+    # if the examiner ever emits a premature closing message. Jumps straight to
+    # grading whatever conversation exists so far.
+    with st.popover("End exam early"):
+        st.caption(
+            "This ends the examination now and grades your responses so far. "
+            "You won't be able to add more."
+        )
+        confirm_end = st.checkbox(
+            "I'm ready to finish", key=f"confirm_end_{attempt}_{exchange_count}"
+        )
+        if st.button(
+            "End exam and grade",
+            key=f"end_now_{attempt}_{exchange_count}",
+            disabled=not confirm_end,
+        ):
+            with st.spinner("Evaluating your performance so far..."):
+                try:
+                    evaluation = grade_conversation(
+                        client, conversation, resolved_topic, question
+                    )
+                    st.session_state["evaluation"] = evaluation
+                    st.session_state["exam_state"] = "complete"
+                    st.rerun()
+                except json.JSONDecodeError as e:
+                    st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Evaluation failed: {str(e)}")
+
     if transcript_text:
         conversation.append({"role": "student", "content": transcript_text})
         new_count = exchange_count + 1
 
-        # Always get the examiner's response — on the final turn the FINAL TURN RULE
-        # in the system prompt causes it to close the exam warmly instead of asking again.
+        # Always get the examiner's response — on the final turn the ENDING THE
+        # EXAMINATION rule in the system prompt causes it to close the exam warmly
+        # instead of asking again.
         with st.spinner("Examiner is thinking..."):
             try:
                 follow_up = get_examiner_response(
                     client, conversation, new_count,
-                    TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic)
+                    TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
+                    question,
                 )
                 conversation.append({"role": "examiner", "content": follow_up})
             except Exception as e:
