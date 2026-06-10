@@ -1,6 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 import assemblyai as aai
+import html
 import json
 import os
 import re
@@ -400,6 +401,12 @@ acknowledge this plainly — but still end with a probe unless this is the final
 turn (closing is governed solely by ENDING THE EXAMINATION below). Do not
 manufacture a redundant probe or loop back over a point already settled.
 
+If the student has NOT addressed a specific sub-point after two attempts at it,
+STOP asking about that sub-point — do not ask about it a third time. Note the
+gap and move to a different facet of the same concept (or, if the concept is
+exhausted, end with a probe per the rules above). Re-asking the same thing a
+third time is looping, not examining.
+
 ─────────────────────────────────────────
 DIFFICULTY RULES
 ─────────────────────────────────────────
@@ -726,7 +733,9 @@ def grade_conversation(
         "Respond in valid JSON with exactly these four keys:\n"
         '- "Score" (integer 1-10)\n'
         '- "Feedback" (string, 2-3 sentences: what they did well, what they struggled with, overall assessment)\n'
-        '- "Misconceptions_Flagged" (boolean: true if significant uncorrected misconceptions remain at the end)\n'
+        '- "Misconceptions_Flagged" (boolean: true ONLY if the student actually expressed an '
+        "incorrect belief that went uncorrected by the end — NOT for gaps, vagueness, "
+        '"I don\'t know", or an incomplete-but-not-wrong answer)\n'
         '- "Trajectory" (string, one of: "improving", "consistent_strong", "consistent_weak", "declining", "mixed")\n\n'
         "Respond with ONLY the JSON object, no additional text."
     )
@@ -962,11 +971,17 @@ def _render_annotated_transcript(conversation: list, annotations: list):
                     quality = ann.get("quality", "")
                     note    = ann.get("note", "")
                     color, label = _COLOR.get(quality, ("#6c757d", quality.capitalize()))
+                    # The note (and the fallback label) originate from the annotator
+                    # LLM, which can echo student-controlled text verbatim. Escape both
+                    # before interpolating into this unsafe_allow_html span, or a student
+                    # could inject HTML/scripts into the results page via their answers.
+                    safe_label = html.escape(str(label))
+                    safe_note = html.escape(str(note))
                     st.markdown(
                         f'<span style="display:inline-block;padding:2px 10px;border-radius:4px;'
                         f'background:{color}22;border:1px solid {color};color:{color};'
-                        f'font-size:0.82em;font-weight:600;">{label}</span>'
-                        f'&nbsp;<span style="font-size:0.85em;color:#555;">{note}</span>',
+                        f'font-size:0.82em;font-weight:600;">{safe_label}</span>'
+                        f'&nbsp;<span style="font-size:0.85em;color:#555;">{safe_note}</span>',
                         unsafe_allow_html=True,
                     )
 
