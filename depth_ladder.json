@@ -1,0 +1,94 @@
+{
+  "_README": "Per-question INTERNAL escalation guide for the live examiner. Keyed by question number (matching oral_exam_questions_list.txt and molecule_map.json). 'probes' are progressively deeper escalation TARGETS (concepts to push toward, not phrasings to read out); 'misconception' is the common wrong idea to watch for and probe. This content is injected into the examiner prompt as non-disclosed guidance and must never be shown to the student. Questions absent from this file simply get no extra guidance. Currently populated for the Stoichiometry topic (Q1-10) as a reviewable template; extend topic-by-topic.",
+
+  "1": {
+    "misconception": "Thinking a small reagent shortfall has only a negligible or non-linear effect, or reasoning from mass shortfall without converting to moles via the balanced ratio.",
+    "probes": [
+      "Quantify the proportionality: if the loaded NaN3 is ~10% short, what happens to the moles (and therefore volume) of N2 produced?",
+      "Write and balance the decomposition (2 NaN3 -> 2 Na + 3 N2) and use the mole ratio to relate moles of azide to moles of N2.",
+      "Connect moles of N2 to the inflated volume via the ideal gas law (V proportional to n at fixed T and P).",
+      "Surface the assumptions behind the strict proportionality: reaction goes to completion, fixed T and P."
+    ]
+  },
+  "2": {
+    "misconception": "Believing the assay measures protein directly, or that any nitrogen-containing additive inflates the reading equally regardless of its mass-percent nitrogen.",
+    "probes": [
+      "Why is nitrogen used as a proxy for protein at all (a fixed nitrogen-to-protein conversion factor)?",
+      "Why is melamine's mass-percent nitrogen so high - reason from its formula (C3H6N6) and molar mass.",
+      "Estimate the effect: with a ~6.25 conversion factor, roughly how much apparent 'protein' does a gram of melamine fake?",
+      "What measurement would distinguish genuine protein nitrogen from melamine nitrogen?"
+    ]
+  },
+  "3": {
+    "misconception": "Thinking a percent yield below 100% means atoms were destroyed, or conflating percent yield with purity or percent composition.",
+    "probes": [
+      "Define percent yield (actual / theoretical x 100) and state what the 'theoretical' value assumes.",
+      "Distinguish the possible causes: incomplete reaction, competing side reactions, and physical losses - which lower the yield?",
+      "Reconcile with conservation of mass: if only 78% of the ethanol formed, where did the rest of the carbon go?",
+      "How could the brewer push the yield higher (drive the reaction further, suppress side products)?"
+    ]
+  },
+  "4": {
+    "misconception": "Confusing amount of substance (moles) with concentration; assuming a correctly sized tablet gives the right concentration regardless of water volume.",
+    "probes": [
+      "Why does the same tablet give a different ppm in pools of different size (c = n / V)?",
+      "Carry out the calculation: given the moles of HOCl released and the pool volume, find the concentration.",
+      "What happens to the free-chlorine concentration as water evaporates or is topped up (dilution)?",
+      "Separate the two quantities: which does the tablet fix (amount), and which does the pool set (volume), and how do they combine?"
+    ]
+  },
+  "5": {
+    "misconception": "Identifying the leftover reactant as the limiting one, or assuming more charcoal is always better without considering excess-carbon contamination.",
+    "probes": [
+      "When carbon is short, which species is limiting and which is left over?",
+      "Write the reduction (e.g. 2 Fe2O3 + 3 C -> 4 Fe + 3 CO2) and use the mole ratio.",
+      "Describe the product when carbon is limiting (unreduced oxide / slag) versus when carbon is in excess (carbon mixed into the iron).",
+      "How does the limiting reagent set the maximum mass of iron obtainable from a given charge?"
+    ]
+  },
+  "6": {
+    "misconception": "Assuming that because both reagents are physically present the reaction must run fully; overlooking that an unreleased reagent does not participate.",
+    "probes": [
+      "Why does releasing only part of the H2O2 make it the limiting reagent even though 'both reagents are present'?",
+      "Relate the moles of excited intermediate (and hence photons emitted) to the moles of limiting H2O2.",
+      "Would fully cracking the ampoule restore full brightness - and what else could still limit it?",
+      "Distinguish brightness (amount/rate of light) from how long the glow lasts."
+    ]
+  },
+  "7": {
+    "misconception": "Treating excess reagent as wasteful or as an error, and confusing the logic of a back-titration with a direct titration.",
+    "probes": [
+      "Why must the analyte (ethanol) be completely consumed in a back-titration?",
+      "What is actually measured (the leftover dichromate), and how does that yield the ethanol amount by difference?",
+      "What goes wrong if dichromate is limiting (unreacted ethanol -> the alcohol content is underestimated)?",
+      "Use the redox stoichiometry (ethanol oxidized, Cr(VI) -> Cr(III)) to back-calculate the ethanol consumed."
+    ]
+  },
+  "8": {
+    "misconception": "Treating the carbon anode as an inert electrode/spectator rather than a consumed reactant tied stoichiometrically to the product.",
+    "probes": [
+      "Why does consumption of the carbon anode stoichiometrically limit how much aluminum can be deposited?",
+      "Write the cell reaction (2 Al2O3 + 3 C -> 4 Al + 3 CO2) and state the C-to-Al mole ratio.",
+      "For a strong student: connect charge passed (Faraday's laws) to the moles of aluminum deposited.",
+      "Why must the anodes be replenished periodically for production to continue?"
+    ]
+  },
+  "9": {
+    "misconception": "Confusing per-pass conversion with overall yield, or believing the unreacted feed is destroyed/lost rather than recoverable.",
+    "probes": [
+      "Why does a 70% per-pass conversion leave 30% of the feed unreacted (not consumed)?",
+      "How does recycling the unreacted heptane raise the overall yield toward 100% over multiple passes?",
+      "Clearly distinguish per-pass conversion from cumulative overall yield.",
+      "Why is recycling preferred to discarding (feedstock cost, atom economy)?"
+    ]
+  },
+  "10": {
+    "misconception": "Thinking the reaction keeps going as long as any reagent remains, and not linking the limiting reagent to the measurable signal (color change).",
+    "probes": [
+      "Why is ethanol the limiting reagent here (small breath sample against a fixed amount of dichromate)?",
+      "Why does the color change stop once the ethanol is gone, even though dichromate remains?",
+      "Why is the degree of color change proportional to the ethanol present - the basis for quantifying it?",
+      "Identify which species is oxidized and which reduced, and why Cr(VI) -> Cr(III) produces the color change."
+    ]
+  }
+}

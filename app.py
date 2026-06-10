@@ -190,8 +190,22 @@ def _load_molecule_map() -> dict[str, list[dict]]:
         return {}
 
 
+def _load_depth_ladder() -> dict[str, dict]:
+    """Load the static per-question examiner depth guide from depth_ladder.json.
+    Keyed by question number; values hold 'probes' (escalation targets) and a
+    'misconception' to watch for. Missing/partial coverage is fine — questions
+    without an entry simply get no extra guidance."""
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "depth_ladder.json")
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 QUESTION_BANK = _load_question_bank()
 MOLECULE_MAP = _load_molecule_map()
+DEPTH_LADDER = _load_depth_ladder()
 
 _enabled_topics = CONFIG.get("enabled_topics", list(QUESTION_BANK.keys()))
 SUBTOPICS = ["Random (any topic)"] + [t for t in _enabled_topics if t in QUESTION_BANK]
@@ -478,6 +492,47 @@ def start_examination(topic: str) -> tuple[str, str]:
     return random.choice(questions), resolved_topic
 
 
+def _format_depth_guide(opening_question: str) -> str:
+    """Build the non-disclosed INTERNAL DEPTH GUIDE block for this question, or
+    "" if no depth-ladder entry exists. Appended to the examiner system prompt
+    to steer HOW the examiner deepens — never content to read out."""
+    q_num = _QUESTION_NUMBER.get(opening_question)
+    entry = DEPTH_LADDER.get(str(q_num)) if q_num is not None else None
+    if not entry:
+        return ""
+    probes = entry.get("probes", [])
+    misconception = entry.get("misconception", "")
+    if not probes and not misconception:
+        return ""
+    lines = [
+        "─────────────────────────────────────────",
+        "INTERNAL DEPTH GUIDE (NEVER REVEAL TO THE STUDENT)",
+        "─────────────────────────────────────────",
+        "",
+        "These are private notes to help you decide HOW to go deeper on THIS "
+        "question's concept. They are escalation targets, NOT a script and NOT "
+        "content to read out. Never state them, hint at their wording, or hand "
+        "them to the student — they only guide which direction to probe next, "
+        "subject to the SCAFFOLDING LIMITS and DISCLOSURE BUDGET above.",
+    ]
+    if probes:
+        lines.append("")
+        lines.append(
+            "Progressively deeper probe targets (move to the next only once the "
+            "student has handled the current layer; stop and acknowledge mastery "
+            "if they exhaust them):"
+        )
+        for i, p in enumerate(probes, 1):
+            lines.append(f"  {i}. {p}")
+    if misconception:
+        lines.append("")
+        lines.append(
+            "Common misconception to watch for and probe if it appears (do NOT "
+            f"pre-warn the student about it): {misconception}"
+        )
+    return "\n".join(lines)
+
+
 def get_examiner_response(
     client, conversation: list, exchange_count: int, topic_instruction: str,
     opening_question: str,
@@ -489,6 +544,9 @@ def get_examiner_response(
         max_exchanges=MAX_EXCHANGES,
         opening_question=opening_question,
     )
+    depth_guide = _format_depth_guide(opening_question)
+    if depth_guide:
+        system_prompt = f"{system_prompt}\n\n{depth_guide}"
     messages = [{"role": "system", "content": system_prompt}]
     for turn in conversation:
         if turn["role"] == "examiner":
