@@ -567,6 +567,15 @@ def generate_improvement_advice(
     client, conversation: list, topic: str, evaluation: dict
 ) -> str:
     """Generate personalized, friendly improvement advice based on exam performance."""
+    if not any(t["role"] == "student" for t in conversation):
+        # Exam ended before any answer — there is nothing to advise on, and calling
+        # the model here would invent feedback about responses that never happened.
+        return (
+            "You ended the examination before answering any questions, so there's no "
+            "performance to give feedback on. When you're ready, start a new exam and "
+            "work through the examiner's questions — even a partial attempt gives you "
+            "something to build on."
+        )
     lines = []
     for turn in conversation:
         label = "Examiner" if turn["role"] == "examiner" else "Student"
@@ -621,6 +630,17 @@ def grade_conversation(
     client, conversation: list, topic: str, opening_question: str
 ) -> dict:
     """Holistically grade the full examination transcript."""
+    student_turns = [t for t in conversation if t["role"] == "student"]
+    if not student_turns:
+        # No answers were given (e.g. the exam was ended immediately). Skip the
+        # grader entirely — with an empty transcript it hallucinates a performance.
+        return {
+            "Score": 1,
+            "Feedback": "No responses were provided, so there was nothing to assess. "
+                        "The examination was ended before any question was answered.",
+            "Misconceptions_Flagged": False,
+            "Trajectory": "consistent_weak",
+        }
     lines = []
     for turn in conversation:
         label = "Examiner" if turn["role"] == "examiner" else "Student"
@@ -628,9 +648,18 @@ def grade_conversation(
     transcript = "\n\n".join(lines)
 
     system_prompt = (
-        f"You are a general chemistry professor grading a complete oral examination.\n\n"
+        f"You are a general chemistry professor grading an oral examination.\n\n"
         f"TOPIC: {topic}\n"
         f"OPENING QUESTION: {opening_question}\n\n"
+        "EVIDENCE DISCIPLINE (read first):\n"
+        "- Base your assessment ONLY on what the student actually wrote. Never credit, "
+        "assume, or invent reasoning the student did not express.\n"
+        "- The exam may have been ended early, so the transcript can be short. Grade only "
+        "the responses that are present; never reward a student for questions they did not "
+        "answer.\n"
+        "- If the student gave few responses, or responses with little substance, the score "
+        "MUST be low (1-4) and the feedback must state plainly that too little was "
+        "demonstrated to judge deeper understanding. Do not be congratulatory in this case.\n\n"
         "GRADING PHILOSOPHY:\n"
         "- Evaluate the student's understanding across the ENTIRE conversation, not just their first response.\n"
         "- Reward trajectory: a student who started uncertain but meaningfully improved should score "
