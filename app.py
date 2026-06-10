@@ -424,6 +424,12 @@ HANDLING STUDENT QUESTIONS AND DEFLECTIONS
 - If the student asks you to define a course concept (e.g., "what is
   entropy?"): do NOT provide the definition. Say: "That concept is at the
   heart of what I'm asking — tell me what you understand about it."
+- If the student repeatedly asks YOU for the answer, the equation, or to
+  "explain it / walk me through it" instead of attempting it themselves, do
+  NOT escalate your hints or reveal more with each request. Give the same
+  brief redirect and add no new chemistry content — naming the governing
+  principle, supplying the equation, or describing the mechanism all count as
+  handing over the answer.
 - If the student says they don't know: encourage ONE attempt. Say: "Take
   your best guess — what do you think might be happening here?" If they
   still cannot answer after one attempt, note the gap and move to a
@@ -533,6 +539,25 @@ def _format_depth_guide(opening_question: str) -> str:
     return "\n".join(lines)
 
 
+# Phrases that signal the examiner is trying to wrap up / close the exam. The
+# final turn is closed deterministically by the state machine, so get_examiner_response
+# is only ever called on NON-final turns — any closing language here is premature
+# (e.g. a student begging to quit) and would strand the student on a "complete"
+# message with the input box still open.
+_CLOSING_MARKERS = (
+    "examination is now complete", "examination is complete", "exam is complete",
+    "examination is over", "exam is over", "brings us to the end",
+    "that concludes", "this concludes", "end of the examination",
+    "thank you for your responses", "we are finished", "we're finished",
+    "that will be all", "results are being prepared",
+)
+
+
+def _looks_like_closing(text: str) -> bool:
+    t = text.lower()
+    return any(m in t for m in _CLOSING_MARKERS)
+
+
 def get_examiner_response(
     client, conversation: list, exchange_count: int, topic_instruction: str,
     opening_question: str,
@@ -553,14 +578,39 @@ def get_examiner_response(
             messages.append({"role": "assistant", "content": turn["content"]})
         else:
             messages.append({"role": "user", "content": turn["content"]})
-    # Live examiner uses a stronger model than the mini helpers: it must reliably
-    # follow the anchoring, progression, and length rules across an adaptive dialogue.
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=messages,
-        timeout=45.0,
-    )
-    return response.choices[0].message.content.strip()
+
+    def _generate(msgs):
+        # Live examiner uses a stronger model than the mini helpers: it must reliably
+        # follow the anchoring, progression, and length rules across an adaptive dialogue.
+        resp = client.chat.completions.create(model="gpt-4.1", messages=msgs, timeout=45.0)
+        return resp.choices[0].message.content.strip()
+
+    out = _generate(messages)
+    # Guard: this is a non-final turn, so the examiner must not close. If a student
+    # tried to quit and the model improvised a wrap-up, retry once with a hard
+    # instruction, then fall back to a deterministic redirect.
+    if _looks_like_closing(out):
+        retry = messages + [
+            {"role": "assistant", "content": out},
+            {"role": "user", "content": (
+                "Do not end or wrap up the examination — it is NOT over, and only the "
+                "student may end it early using the app's button. Ask your next chemistry "
+                "question about the same concept now, in one or two sentences, with no "
+                "closing, thank-you, or 'examination complete' language."
+            )},
+        ]
+        try:
+            retry_out = _generate(retry)
+            out = retry_out if not _looks_like_closing(retry_out) else (
+                "Let's stay focused — the examination isn't over yet. Returning to the "
+                f"question: {opening_question} What is your reasoning?"
+            )
+        except Exception:
+            out = (
+                "Let's stay focused — the examination isn't over yet. Returning to the "
+                f"question: {opening_question} What is your reasoning?"
+            )
+    return out
 
 
 def generate_improvement_advice(
