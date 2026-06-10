@@ -1,5 +1,5 @@
 {
-  "_README": "Per-question INTERNAL escalation guide for the live examiner. Keyed by question number (matching oral_exam_questions_list.txt and molecule_map.json). 'probes' are progressively deeper escalation TARGETS (concepts to push toward, not phrasings to read out); 'misconception' is the common wrong idea to watch for and probe. This content is injected into the examiner prompt as non-disclosed guidance and must never be shown to the student. Questions absent from this file simply get no extra guidance. Currently populated for the Stoichiometry topic (Q1-10) as a reviewable template; extend topic-by-topic.",
+  "_README": "Per-question INTERNAL escalation guide for the live examiner. Keyed by question number (matching oral_exam_questions_list.txt and molecule_map.json). 'probes' are progressively deeper escalation TARGETS (concepts to push toward, not phrasings to read out); 'misconception' is the common wrong idea to watch for and probe. This content is injected into the examiner prompt as non-disclosed guidance and must never be shown to the student. Questions absent from this file simply get no extra guidance. Covers all topics (Q1-100; Q16 is intentionally absent from the bank). Entries match the current question wording, including re-angled questions (19, 28, 40, 50, 52, 55, 76, 80) and de-named stems.",
 
   "1": {
     "misconception": "Thinking a small reagent shortfall has only a negligible or non-linear effect, or reasoning from mass shortfall without converting to moles via the balanced ratio.",
@@ -89,6 +89,816 @@
       "Why does the color change stop once the ethanol is gone, even though dichromate remains?",
       "Why is the degree of color change proportional to the ethanol present - the basis for quantifying it?",
       "Identify which species is oxidized and which reduced, and why Cr(VI) -> Cr(III) produces the color change."
+    ]
+  },
+
+  "11": {
+    "misconception": "Believing pressure can only rise from a chemical reaction or by 'creating' molecules, rather than from a phase change adding gas-phase molecules.",
+    "probes": [
+      "Where do the gas molecules come from if no reaction occurs (a solid-to-gas phase change)?",
+      "Relate the added moles of gas to pressure at fixed volume and temperature (PV = nRT).",
+      "What happens to the pressure as more dry ice sublimes, and what finally limits it (vessel strength / equilibrium)?",
+      "Contrast with a true chemical reaction: is the total number of molecules conserved here?"
+    ]
+  },
+  "12": {
+    "misconception": "Assuming all gases behave ideally, or that molar mass alone (not intermolecular forces) governs deviation from ideal behavior.",
+    "probes": [
+      "What molecular property makes a real gas deviate from ideal behavior (intermolecular attractions)?",
+      "Compare CO and water: why does water's hydrogen bonding cause larger deviation than CO's weak forces?",
+      "Under what conditions (low temperature, high pressure) do these deviations become most pronounced?",
+      "For a strong student: which van der Waals term (a, attractions) captures this difference?"
+    ]
+  },
+  "13": {
+    "misconception": "Believing the pressure dropped because air leaked out, rather than recognizing the temperature dependence of pressure at fixed n and V.",
+    "probes": [
+      "With no air escaping, which variable changed to lower the pressure (temperature)?",
+      "State the relationship between P and absolute temperature at constant V and n.",
+      "Why must temperature be in kelvin for this proportionality to hold?",
+      "Estimate roughly how much the pressure drops for a given temperature change (proportional reasoning)."
+    ]
+  },
+  "14": {
+    "misconception": "Thinking the bubbles are newly created gas, rather than dissolved gas leaving solution as its solubility falls with pressure.",
+    "probes": [
+      "Why does opening the cap cause CO2 to leave solution (the pressure above the liquid drops)?",
+      "Relate gas solubility to the partial pressure above the liquid (Henry's law).",
+      "Where was the CO2 before opening - why were no 'new' molecules created?",
+      "Why does warm soda go flat faster (temperature dependence of gas solubility)?"
+    ]
+  },
+  "15": {
+    "misconception": "Treating boiling point as a fixed property of a liquid, independent of the surrounding pressure.",
+    "probes": [
+      "What condition defines boiling in terms of vapor pressure and external pressure?",
+      "Why does lowering the external pressure lower the boiling temperature?",
+      "How does this let distillers separate heat-sensitive compounds at gentler temperatures?",
+      "Connect to altitude: why does water boil below 100 C on a mountain?"
+    ]
+  },
+  "17": {
+    "misconception": "Attributing the temperature rise to the gas being 'squeezed into less space' rather than to work done on the molecules raising their kinetic energy.",
+    "probes": [
+      "What is happening to the molecules' speeds / kinetic energy as the piston does work on them?",
+      "Link average molecular kinetic energy to temperature.",
+      "Why must the compression be rapid (adiabatic) for the temperature to rise noticeably?",
+      "Contrast slow compression with heat allowed to escape - why is the result different?"
+    ]
+  },
+  "18": {
+    "misconception": "Asserting 'more heat means more pressure' without connecting temperature to molecular speed and collision frequency/force.",
+    "probes": [
+      "What happens to molecular speeds as temperature rises (the kinetic-energy/temperature relationship)?",
+      "How do faster molecules change the frequency and force of wall collisions?",
+      "Tie collision frequency and force back to the macroscopic pressure on the casing.",
+      "At fixed volume, what does this predict for the pressure-temperature relationship?"
+    ]
+  },
+  "19": {
+    "misconception": "Assuming real gases always exert higher pressure than ideal, or attributing all deviation to molecular volume regardless of conditions.",
+    "probes": [
+      "What intermolecular feature reduces the force of wall collisions below the ideal prediction (attractions)?",
+      "Identify which van der Waals correction this is (the -a(n/V)^2 term).",
+      "Why do attractions dominate at moderate pressure but the finite molecular volume (b term) dominate at very high pressure?",
+      "For a strong student: describe how the compressibility factor Z sits below or above 1 in each regime."
+    ]
+  },
+  "20": {
+    "misconception": "Thinking only molar mass matters, or that larger molecules are somehow 'more ideal'.",
+    "probes": [
+      "Why do larger, more polarizable molecules experience stronger London dispersion forces?",
+      "How does the finite molecular volume of a large molecule violate an ideal-gas assumption?",
+      "Why does butane, being smaller and less polarizable, track ideal behavior more closely?",
+      "Which ideal-gas assumptions (no attractions, negligible volume) are most strained by tetraethyllead?"
+    ]
+  },
+
+  "21": {
+    "misconception": "Confusing the visible fizz with the equilibrium shift, or not identifying the stress (lower headspace CO2 pressure) that drives it.",
+    "probes": [
+      "Identify the equilibrium (dissolved CO2 <-> gaseous CO2) and the stress applied on opening.",
+      "Which direction does lowering the headspace CO2 pressure drive the system, and why?",
+      "Is the Le Chatelier description and a Henry's-law description capturing the same shift?",
+      "Why does the burst eventually stop (a new equilibrium / depleted dissolved CO2)?"
+    ]
+  },
+  "22": {
+    "misconception": "Thinking added acid directly 'attacks' CaCO3, rather than removing carbonate product and pulling the dissolution equilibrium forward.",
+    "probes": [
+      "Write the relevant equilibria (CaCO3 dissolution; H+ + CO3^2- -> HCO3-).",
+      "How does consuming carbonate ion shift the dissolution equilibrium (Le Chatelier)?",
+      "Why does that make calcium carbonate skeletons dissolve more readily?",
+      "Connect to acidification: why does rising dissolved CO2 lower carbonate availability?"
+    ]
+  },
+  "23": {
+    "misconception": "Treating fermentation as freely reversible, or not connecting rising product partial pressure to Q exceeding K.",
+    "probes": [
+      "Identify the gaseous product whose buildup applies the stress.",
+      "How does increasing a product's partial pressure change the reaction quotient Q relative to K?",
+      "Which direction does the system shift to restore equilibrium, slowing the net forward process?",
+      "For a strong student: why is venting CO2 used in practice to keep fermentation going?"
+    ]
+  },
+  "24": {
+    "misconception": "Confusing which form is favored by lower pH, or not seeing added H+ as the stress on the dissociation equilibrium.",
+    "probes": [
+      "Write HOCl <-> H+ + OCl- and identify the stress when pH is lowered (more H+).",
+      "Which direction does added H+ drive the equilibrium, and which species is favored?",
+      "Why does that increase the fraction present as the neutral HOCl?",
+      "Connect to disinfection: why is HOCl the more effective germicide than OCl-?"
+    ]
+  },
+  "25": {
+    "misconception": "Thinking the instrument must measure blood directly, or that the breath/blood ratio is arbitrary rather than a fixed partition at body temperature.",
+    "probes": [
+      "Why does a fixed equilibrium ratio let a breath measurement stand in for the blood concentration?",
+      "What does the ~2100:1 partition coefficient represent physically?",
+      "Why does body temperature need to be roughly constant for this to hold?",
+      "What would happen to the estimate if the actual ratio differed from the assumed one?"
+    ]
+  },
+  "26": {
+    "misconception": "Memorizing 'higher temperature shifts right' without recognizing that this depends on the reaction being endothermic (heat as a reactant).",
+    "probes": [
+      "For an endothermic reaction, where does 'heat' effectively sit (the reactant side)?",
+      "Why does adding heat (raising T) shift the equilibrium toward products here?",
+      "How would the answer differ if the reaction were exothermic?",
+      "For a strong student: how does raising T change the value of K itself, not just the position?"
+    ]
+  },
+  "27": {
+    "misconception": "Assuming hotter water dissolves more of every solute, rather than tying it to the endothermic enthalpy of dissolution.",
+    "probes": [
+      "For an endothermic dissolution, how does heat behave (like a reactant)?",
+      "Why does raising temperature increase the equilibrium amount dissolved?",
+      "Give a counterexample - a gas whose solubility decreases with temperature - and explain the difference.",
+      "Distinguish the rate of dissolving from the equilibrium amount dissolved."
+    ]
+  },
+  "28": {
+    "misconception": "Reading the color change as an irreversible reaction or simple kinetics, rather than a genuine, reversible equilibrium that temperature shifts.",
+    "probes": [
+      "Why is this a true reversible equilibrium rather than a one-way reaction (the color returns)?",
+      "How does temperature behave like a reactant or product when the reaction has a nonzero enthalpy?",
+      "Predict the color-change direction on heating if the forward reaction is endothermic.",
+      "Why can restoring the original temperature restore the original color, unlike a decomposition?"
+    ]
+  },
+  "29": {
+    "misconception": "Thinking the amount of solid affects the equilibrium position, or that solids are omitted from the expression arbitrarily.",
+    "probes": [
+      "Why is the activity (effective concentration) of a pure solid constant regardless of amount?",
+      "How does that constancy let it be folded into K rather than written as a variable?",
+      "Predict: does adding more dry ice change the equilibrium gas pressure? Why or why not?",
+      "Does the same reasoning apply to a pure liquid?"
+    ]
+  },
+  "30": {
+    "misconception": "Assuming Kp and Kc are always equal, or not connecting their difference to a change in the moles of gas.",
+    "probes": [
+      "On what quantities are Kp and Kc each based (partial pressures vs molar concentrations)?",
+      "State the relationship Kp = Kc(RT)^(delta n) and define delta n.",
+      "For NO2/N2O4, work out delta n and explain why the constants differ numerically.",
+      "When would Kp and Kc be numerically equal (delta n = 0)?"
+    ]
+  },
+
+  "31": {
+    "misconception": "Assuming an exothermic reaction's energy must go entirely into one channel (all light or all heat).",
+    "probes": [
+      "Into what forms does the released chemical energy partition (photons versus heat)?",
+      "Why does an exothermic reaction guarantee that some energy warms the surroundings?",
+      "What would 'efficiency' of the chemiluminescent reaction mean in this framing?",
+      "Connect to enthalpy: is the warmth consistent with an overall negative delta H?"
+    ]
+  },
+  "32": {
+    "misconception": "Describing it as merely 'getting hot' without the positive-feedback link between heat released and reaction rate.",
+    "probes": [
+      "Why does heat released by one decomposition speed up neighboring decompositions (Arrhenius)?",
+      "How does that create a self-reinforcing (positive-feedback) loop?",
+      "What is the specific role of the exothermicity (versus an endothermic process)?",
+      "What could interrupt the loop (cooling faster than heat is generated)?"
+    ]
+  },
+  "33": {
+    "misconception": "Assuming an external heat source is needed, or ignoring the role of pile size/insulation in heat accumulation.",
+    "probes": [
+      "What reaction releases the heat (exothermic microbial oxidation of organic matter)?",
+      "Why does a large, insulated pile get hot while a thin layer does not (generation versus dissipation)?",
+      "Trace the energy bookkeeping - where does the chemical energy go?",
+      "Why might the pile eventually stop heating (substrate depletion, drying out)?"
+    ]
+  },
+  "34": {
+    "misconception": "Believing more reaction steps means a different total enthalpy, i.e. treating enthalpy as path-dependent.",
+    "probes": [
+      "What property of enthalpy makes the total change depend only on initial and final states?",
+      "Why does the number of intermediate steps not affect the overall delta H?",
+      "How would you sum the step enthalpies to get the overall value?",
+      "Would the same path-independence hold for the reaction rate? Why not?"
+    ]
+  },
+  "35": {
+    "misconception": "Thinking a complex multi-step browning has a path-dependent energy, or conflating enthalpy with rate/mechanism.",
+    "probes": [
+      "Why is the total delta H independent of the intermediate cascade (state function)?",
+      "How could you use known step enthalpies to find the overall change?",
+      "Distinguish what depends on path (rate, mechanism) from what does not (delta H).",
+      "Why is this principle useful when intermediates are hard to measure directly?"
+    ]
+  },
+  "36": {
+    "misconception": "Thinking bond breaking releases energy (it costs energy), or reversing the broken/formed bookkeeping.",
+    "probes": [
+      "Does breaking a bond absorb or release energy? And forming one?",
+      "Set up the estimate: sum(bonds broken) minus sum(bonds formed).",
+      "What does a positive versus negative result tell you (endothermic versus exothermic)?",
+      "Why is this only an estimate (average bond enthalpies versus actual values)?"
+    ]
+  },
+  "37": {
+    "misconception": "Attributing the cracks to the chemistry alone rather than to differential thermal expansion from uneven heat dissipation.",
+    "probes": [
+      "Why does the interior stay hotter than the surface during curing (heat dissipation)?",
+      "How does differential expansion and contraction create tensile stress?",
+      "Why does exceeding the tensile strength cause cracking?",
+      "What mitigation follows from this (slow curing, cooling pipes)?"
+    ]
+  },
+  "38": {
+    "misconception": "Not connecting a measured temperature rise to heat via q = mcDeltaT, or forgetting to normalize per mole.",
+    "probes": [
+      "What equation converts the water's temperature rise into the heat absorbed (q = mcDeltaT)?",
+      "Under what assumption does that heat equal the reaction's enthalpy release (no heat loss)?",
+      "How do you convert total heat into delta H per mole (divide by moles of H2O2)?",
+      "What experimental errors would bias the result (heat loss, incomplete reaction)?"
+    ]
+  },
+  "39": {
+    "misconception": "Concluding that because no warmth is felt, the reaction is not exothermic - conflating thermodynamics with rate.",
+    "probes": [
+      "Separate the two questions: is rusting exothermic (thermodynamics) versus how fast (kinetics)?",
+      "Why does a very slow reaction release its heat too slowly to feel?",
+      "What controls the rate here (activation energy, ambient conditions)?",
+      "Contrast with a fast exothermic reaction (combustion) that clearly feels hot."
+    ]
+  },
+  "40": {
+    "misconception": "Confusing heat capacity with temperature, or assuming all materials change temperature equally for the same heat input.",
+    "probes": [
+      "Why does water's high specific heat mean only a small temperature change for a given heat (q = mcDeltaT)?",
+      "Why do rock and sand, with lower heat capacities, swing more in temperature?",
+      "How does the ocean exchanging heat with the air buffer coastal temperatures?",
+      "Distinguish heat (energy) from temperature in this scenario."
+    ]
+  },
+
+  "41": {
+    "misconception": "Believing a negative delta G guarantees an observable rate.",
+    "probes": [
+      "What does delta G tell you (direction/favorability) versus what it does not (rate)?",
+      "Why does a large activation barrier make a favorable transformation imperceptibly slow?",
+      "What is 'kinetic stability' (metastability)?",
+      "What conditions could actually speed the diamond-to-graphite conversion (very high temperature)?"
+    ]
+  },
+  "42": {
+    "misconception": "Predicting the wrong sign of the entropy change, or ignoring that producing many (especially gaseous) molecules raises disorder.",
+    "probes": [
+      "What happens to the number of accessible microstates when one large molecule becomes many small ones?",
+      "Why does producing gases (CO2, water vapor) strongly increase entropy?",
+      "Predict the sign of delta S and justify it.",
+      "How does this entropy term factor into spontaneity (the TDeltaS term in delta G)?"
+    ]
+  },
+  "43": {
+    "misconception": "Thinking the energy invested to make a molecule protects it thermodynamically (treating spontaneity as history-dependent).",
+    "probes": [
+      "Does spontaneity depend on how a molecule was made, or only on current versus product free energy?",
+      "Why are the hydrolysis products lower in free energy than intact mRNA?",
+      "Reconcile: how can something expensive to synthesize still degrade spontaneously?",
+      "What then keeps mRNA intact in practice (kinetics / storage conditions)?"
+    ]
+  },
+  "44": {
+    "misconception": "Assuming endothermic processes cannot be spontaneous, ignoring the entropy term.",
+    "probes": [
+      "Write delta G = delta H - TDeltaS and identify the signs for sublimation.",
+      "Why does the large positive delta S (solid to gas) drive spontaneity?",
+      "Why is there a threshold temperature (-78 C) for spontaneity?",
+      "Below that temperature, which term wins and what happens?"
+    ]
+  },
+  "45": {
+    "misconception": "Assuming entropy always favors spontaneity, or that both delta H and delta S must be favorable for delta G to be negative.",
+    "probes": [
+      "What is the sign of the system's entropy change when O2 gas is consumed into a solid? Why?",
+      "Given the unfavorable entropy, which term must drive spontaneity (the exothermic delta H)?",
+      "Write delta G = delta H - TDeltaS and show how a negative delta H can dominate.",
+      "What would happen at very high temperature, where the TDeltaS term grows?"
+    ]
+  },
+  "46": {
+    "misconception": "Treating spontaneity as fixed rather than temperature-dependent when delta H and delta S share the same sign.",
+    "probes": [
+      "Given delta H > 0 and delta S > 0, how does raising T change delta G?",
+      "What defines the crossover temperature where delta G changes sign?",
+      "Why is the reaction non-spontaneous below it and spontaneous above?",
+      "Express that crossover temperature qualitatively in terms of delta H and delta S."
+    ]
+  },
+  "47": {
+    "misconception": "Confusing a faster rate at higher temperature with a more favorable delta G - conflating kinetics and thermodynamics.",
+    "probes": [
+      "Why does delta G barely change while the rate changes a lot with temperature?",
+      "What controls the rate (the activation energy and the fraction of molecules above it)?",
+      "Distinguish 'how favorable' from 'how fast'.",
+      "Why does refrigeration slow degradation even when delta G is already negative?"
+    ]
+  },
+  "48": {
+    "misconception": "Attributing persistence to thermodynamic stability when oxidation is actually favorable - the barrier is kinetic.",
+    "probes": [
+      "Is complete oxidation of polyethylene thermodynamically favorable? What does that imply?",
+      "If favorable, why does it persist for centuries (a kinetic barrier)?",
+      "What makes the C-C and C-H bonds kinetically hard to break without enzymes or extreme conditions?",
+      "State the difference between thermodynamic stability and kinetic stability explicitly."
+    ]
+  },
+  "49": {
+    "misconception": "Thinking separation can be spontaneous, or ignoring that unmixing decreases entropy.",
+    "probes": [
+      "What happens to entropy when a well-mixed system is separated into pure components?",
+      "Why, with no compensating exothermic enthalpy, does that make delta G positive?",
+      "How does the second law require external work for a non-spontaneous separation?",
+      "Why is isotope separation especially hard (the isotopes are chemically near-identical)?"
+    ]
+  },
+  "50": {
+    "misconception": "Thinking energy conservation alone permits the reverse process, ignoring that total entropy must increase.",
+    "probes": [
+      "Why does energy conservation alone not forbid the coffee reheating itself?",
+      "What additional law selects the allowed direction (the entropy of the universe must increase)?",
+      "Why does spreading thermal energy into the room increase the total number of microstates / entropy?",
+      "Connect to delta S_universe = delta S_system + delta S_surroundings > 0 for a spontaneous process."
+    ]
+  },
+
+  "51": {
+    "misconception": "Assuming more protons and electrons always means a larger ion, ignoring effective nuclear charge and shielding.",
+    "probes": [
+      "Why are Cr3+ and Al3+ similar in size despite chromium having more protons and electrons?",
+      "How do poor shielding by 3d electrons and high nuclear charge contract the ion?",
+      "Why does similar size (and the same +3 charge) allow substitution into the lattice?",
+      "What would happen if the substituting ion were much larger or differently charged?"
+    ]
+  },
+  "52": {
+    "misconception": "Treating metallic versus nonmetallic character as arbitrary rather than tracking it to periodic trends in ionization energy and electronegativity.",
+    "probes": [
+      "How do effective nuclear charge, ionization energy, and electronegativity change across a period?",
+      "Why do left-side elements lose electrons easily (metallic) while right-side ones hold them (nonmetallic)?",
+      "Why does silicon's intermediate position give it intermediate (metalloid) behavior?",
+      "Predict how character changes down a group, and why."
+    ]
+  },
+  "53": {
+    "misconception": "Thinking covalent bonds have no ionic character, or that polarity does not affect bond strength.",
+    "probes": [
+      "Why does fluorine's high electronegativity make the C-F bond very polar?",
+      "How does partial ionic character add to bond strength on top of covalent sharing?",
+      "Why does this make C-F unusually short and strong?",
+      "Connect to 'forever chemicals': why does a strong bond imply environmental persistence (kinetic)?"
+    ]
+  },
+  "54": {
+    "misconception": "Assuming only chemical similarity matters, ignoring the role of matching ionic radius and charge for substitution.",
+    "probes": [
+      "Why does a similar ionic radius and identical +2 charge let Pb2+ occupy Ca2+ sites?",
+      "How does fitting the coordination geometry of hydroxyapatite enable substitution?",
+      "What are the limits - how different could the radius be before substitution fails?",
+      "Why is this biologically dangerous (lead accumulating in bone)?"
+    ]
+  },
+  "55": {
+    "misconception": "Expecting ionization energies to rise smoothly, not recognizing the large jump when removal breaks into a noble-gas core.",
+    "probes": [
+      "Why is removing sodium's single 3s electron easy but the second electron very hard (it is a core electron)?",
+      "Why are magnesium's first and second ionization energies comparable (both valence 3s)?",
+      "Where does magnesium's large jump occur instead (the third ionization)?",
+      "How do successive-ionization-energy jumps reveal an element's group / valence-electron count?"
+    ]
+  },
+  "56": {
+    "misconception": "Assuming isoelectronic species are the same size, ignoring differing nuclear charge.",
+    "probes": [
+      "Why do Na+ and Mg2+ have the same number of electrons but different sizes?",
+      "How does Mg2+'s greater nuclear charge (12 versus 11 protons) contract its electron cloud?",
+      "State the general trend for radius across an isoelectronic series.",
+      "Predict the size order for an isoelectronic series (e.g. O2-, F-, Na+, Mg2+)."
+    ]
+  },
+  "57": {
+    "misconception": "Assuming silicon and carbon behave identically, or misjudging the direction/size of the electronegativity difference.",
+    "probes": [
+      "How do the electronegativities of Si, C, and O compare?",
+      "Why is the Si-O bond more polar (more ionic character) than the C-O bond?",
+      "How does greater bond polarity affect bond length, strength, and flexibility?",
+      "Connect to the polymer backbone: why does this help oxygen permeability and flexibility?"
+    ]
+  },
+  "58": {
+    "misconception": "Calling any interaction with hydrogen a 'hydrogen bond', or not tying N-H polarity to the electronegativity difference.",
+    "probes": [
+      "Why is the N-H bond polar (electronegativity difference), and which atom carries the partial positive charge?",
+      "What does the partial-positive hydrogen need nearby to form a hydrogen bond (a lone pair on N/O/F)?",
+      "Distinguish the hydrogen bond from the covalent N-H bond itself.",
+      "Why does this matter for peptide structure and drug binding?"
+    ]
+  },
+  "59": {
+    "misconception": "Attributing allotrope diversity to something other than carbon's small size and four valence electrons / hybridization flexibility.",
+    "probes": [
+      "How do four valence electrons enable four covalent bonds in different hybridizations (sp, sp2, sp3)?",
+      "Why does carbon's small radius make those bonds short and strong?",
+      "How do different hybridizations lead to diamond versus graphite versus nanotubes?",
+      "Why can't most other elements form a comparable range of network structures?"
+    ]
+  },
+  "60": {
+    "misconception": "Thinking neutron number (mass) affects chemical bonding, rather than electron configuration.",
+    "probes": [
+      "What determines chemical bonding - proton/electron count or neutron count?",
+      "Why do C-12 and C-14 share identical electron configurations and reactivity?",
+      "What properties DO differ between isotopes (mass, nuclear stability)?",
+      "For a strong student: why can mass cause small kinetic-isotope rate effects while leaving the chemistry the same?"
+    ]
+  },
+
+  "61": {
+    "misconception": "Assuming a covalent bond cannot have ionic character, or that bond classification is all-or-nothing.",
+    "probes": [
+      "Why does the large C-F electronegativity difference distribute the shared electrons unevenly?",
+      "How can a bond be covalent by classification yet have significant ionic character?",
+      "How does that polarity contribute to the bond's strength?",
+      "Where does C-F sit on the ionic-covalent continuum, and why is it not fully ionic?"
+    ]
+  },
+  "62": {
+    "misconception": "Not recognizing the lone pair as the source of basicity, or confusing Bronsted and Lewis base behavior.",
+    "probes": [
+      "Why does the nitrogen lone pair make nicotine basic (proton acceptor / electron-pair donor)?",
+      "Distinguish a Bronsted base (accepts H+) from a Lewis base (donates a pair).",
+      "How does that same lone pair enable binding to a receptor site?",
+      "What would reduce this basicity (delocalization of the lone pair)?"
+    ]
+  },
+  "63": {
+    "misconception": "Believing a single Lewis structure with distinct single and double bonds is correct, not recognizing delocalization / equal bond lengths.",
+    "probes": [
+      "Why can no single Lewis structure show three equal C-O bonds?",
+      "What does the equal bond length tell you about the electron distribution (delocalization)?",
+      "How do multiple resonance forms combine into a single hybrid?",
+      "How does delocalization stabilize the ion?"
+    ]
+  },
+  "64": {
+    "misconception": "Choosing a Lewis structure by gut feel, or misapplying formal charge (e.g. placing positive formal charge on the more electronegative atom).",
+    "probes": [
+      "How do you calculate the formal charge on an atom in a proposed structure?",
+      "What makes a structure with large or oddly placed formal charges less reasonable?",
+      "Why is positive formal charge on a highly electronegative atom unfavorable?",
+      "Use formal charge to compare two candidate structures for SiO4^4-."
+    ]
+  },
+  "65": {
+    "misconception": "Treating the amide nitrogen like an ordinary amine, ignoring lone-pair delocalization into the carbonyl.",
+    "probes": [
+      "Why does the nitrogen lone pair delocalize into the adjacent C=O (conjugation)?",
+      "What does the resonance hybrid look like (partial C=N, partial C-O single bond)?",
+      "Why does tying up the lone pair make the nitrogen a weaker base than an amine?",
+      "How would breaking that conjugation change its basicity?"
+    ]
+  },
+  "66": {
+    "misconception": "Attributing the planarity to coincidence rather than to conjugation requiring coplanar p-orbital overlap.",
+    "probes": [
+      "Why does delocalization require the participating atoms to be coplanar (p-orbital overlap)?",
+      "Why would twisting the ring break conjugation and raise the energy?",
+      "How does that lock the molecule into a planar, rigid shape?",
+      "Contrast with a non-conjugated ring that can pucker freely."
+    ]
+  },
+  "67": {
+    "misconception": "Assuming all polymers have the same intermolecular forces, ignoring how C-Cl dipoles add dipole-dipole attraction.",
+    "probes": [
+      "Why is the C-Cl bond polar while C-C and C-H are essentially nonpolar?",
+      "How do permanent dipoles create dipole-dipole attractions between PVC chains?",
+      "Why are those stronger than the dispersion forces in polyethylene?",
+      "How does stronger interchain attraction change rigidity and glass-transition temperature?"
+    ]
+  },
+  "68": {
+    "misconception": "Treating every shared pair as a standard covalent bond, not recognizing that both electrons can come from one atom.",
+    "probes": [
+      "In a coordinate/dative bond, where do both shared electrons originate (the donor)?",
+      "Why is the Fe-N bond best described this way (nitrogen lone pair into an empty Fe orbital)?",
+      "How does this differ from an ordinary covalent bond (one electron from each atom)?",
+      "Once formed, is a dative bond distinguishable from a normal covalent bond?"
+    ]
+  },
+  "69": {
+    "misconception": "Defaulting to 'covalent' for every bond, or not using the electronegativity difference to classify.",
+    "probes": [
+      "What is the electronegativity difference between iron and oxygen telling you?",
+      "Why does a large difference favor electron transfer (ionic) over sharing (covalent)?",
+      "How does the resulting cation-anion electrostatic attraction define ionic bonding?",
+      "Where is the ionic-covalent boundary fuzzy (percent ionic character)?"
+    ]
+  },
+  "70": {
+    "misconception": "Equating polar bonds with a polar molecule, ignoring that symmetric geometry cancels the bond dipoles.",
+    "probes": [
+      "Why is each C-F bond strongly polar (the electronegativity of fluorine)?",
+      "What is the molecular geometry of CF4 (tetrahedral), and how are the bond dipoles arranged?",
+      "Why do four symmetric bond dipoles cancel to give zero net dipole?",
+      "Contrast with a molecule where they do not cancel (e.g. CHF3 or H2O)."
+    ]
+  },
+
+  "71": {
+    "misconception": "Citing 'polarity' vaguely without identifying hydrogen bonding through the two -OH groups.",
+    "probes": [
+      "Why can each -OH group both donate and accept hydrogen bonds with water?",
+      "How do two -OH groups per molecule strengthen the attraction to water?",
+      "Why does this make the molecule hygroscopic (water-attracting)?",
+      "Contrast with a similar molecule that has no -OH groups."
+    ]
+  },
+  "72": {
+    "misconception": "Assuming temperature changes the chemistry, rather than helping molecules overcome intermolecular attractions.",
+    "probes": [
+      "What intermolecular forces hold BPA within the polymer (dispersion, dipole-dipole)?",
+      "Why does higher temperature help more molecules overcome those forces?",
+      "Why does this increase the rate and extent of leaching?",
+      "Connect the kinetic-energy distribution to the fraction of molecules able to escape."
+    ]
+  },
+  "73": {
+    "misconception": "Not identifying ion-dipole forces, or thinking the salt chemically reacts with the ice.",
+    "probes": [
+      "What forces form between Na+/Cl- ions and polar water molecules (ion-dipole)?",
+      "Why are those strong enough to pull water out of the ordered ice lattice?",
+      "How does disrupting the hydrogen-bond network lower the freezing point?",
+      "Why does this work even below 0 C?"
+    ]
+  },
+  "74": {
+    "misconception": "Expecting one material property to do everything, missing the 'like dissolves like' split between nonpolar O2 and the polar surface.",
+    "probes": [
+      "Why does nonpolar O2 dissolve readily in the nonpolar silicone backbone (like dissolves like)?",
+      "Why is a separate hydrophilic coating needed for surface wettability?",
+      "How do polar surface groups hydrogen-bond with the tear film?",
+      "Why can't a single polarity satisfy both requirements at once?"
+    ]
+  },
+  "75": {
+    "misconception": "Assuming boiling point tracks molar mass, ignoring the dominance of hydrogen-bonding networks.",
+    "probes": [
+      "Why does water boil higher than ethanol despite being the smaller molecule?",
+      "How many hydrogen-bond donors and acceptors does each molecule have, and why does that matter?",
+      "Why does ethanol's nonpolar tail weaken its overall network?",
+      "Rank the two by intermolecular-force strength and connect to boiling point."
+    ]
+  },
+  "76": {
+    "misconception": "Attributing viscosity only to molecular size or weight, not to the extent of the hydrogen-bonding network.",
+    "probes": [
+      "Why do glycerol's three -OH groups create an extensive hydrogen-bond network?",
+      "How does that network resist molecules sliding past one another (viscosity)?",
+      "Why is water, which also hydrogen-bonds, far less viscous?",
+      "Predict how the viscosity changes when glycerol is diluted with water or heated."
+    ]
+  },
+  "77": {
+    "misconception": "Ignoring how protonation state and geometry change polarity, and thus the ability to cross lipid versus aqueous layers.",
+    "probes": [
+      "Why is free-base nicotine (neutral nitrogen) more able to cross lipid membranes?",
+      "Why does the protonated (charged) form struggle to penetrate the lipid layer?",
+      "How does the molecule's moderate lipophilicity let it traverse both layers?",
+      "How would changing the pH shift the balance between the two forms?"
+    ]
+  },
+  "78": {
+    "misconception": "Not recognizing pi-pi stacking as the stabilizing force, or thinking aggregation increases reactivity.",
+    "probes": [
+      "What intermolecular force lets flat aromatic dyes stack tightly (pi-pi interactions)?",
+      "Why does stacking shield the reactive surfaces from attack?",
+      "Why does reduced accessible surface area slow degradation?",
+      "How might breaking up the aggregates speed the breakdown?"
+    ]
+  },
+  "79": {
+    "misconception": "Guessing geometry without counting electron groups, or forgetting that four bonding pairs (no lone pairs) give a tetrahedron.",
+    "probes": [
+      "How many electron groups surround each silicon (four bonding pairs, no lone pairs)?",
+      "What geometry minimizes their repulsion, and what principle predicts it (VSEPR)?",
+      "Why does this hold in both ordered quartz and disordered glass?",
+      "How would a lone pair change the predicted geometry?"
+    ]
+  },
+  "80": {
+    "misconception": "Thinking a double bond rotates freely like a single bond, missing that the pi overlap locks the geometry.",
+    "probes": [
+      "Why can't the C=C double bond rotate freely (breaking the pi overlap costs energy)?",
+      "Why are cis and trans distinct, non-interconverting shapes without added energy?",
+      "How does cis-to-trans straightening change the overall molecular shape?",
+      "Contrast with free rotation about a single (sigma) bond."
+    ]
+  },
+
+  "81": {
+    "misconception": "Thinking total mass alone sets the rate, ignoring the surface-area-to-volume ratio.",
+    "probes": [
+      "Why do smaller particles have a higher surface-area-to-volume ratio?",
+      "Why does more exposed surface speed the degradation rate?",
+      "Why does the same mass fade faster when divided into smaller particles?",
+      "Connect to heterogeneous reaction rates depending on available surface area."
+    ]
+  },
+  "82": {
+    "misconception": "Thinking the catalyst is consumed, or not recognizing saturation kinetics (zero-order at high substrate).",
+    "probes": [
+      "How does the enzyme speed the reaction without being consumed (lowers Ea, then is regenerated)?",
+      "What happens to the rate as substrate increases until all active sites are occupied?",
+      "Why does the rate plateau at Vmax (zero-order in substrate) when saturated?",
+      "Why can a large overdose overwhelm the pathway?"
+    ]
+  },
+  "83": {
+    "misconception": "Treating the active site as passive, not seeing how precise residue arrangement lowers Ea by stabilizing the transition state.",
+    "probes": [
+      "How does the spatial arrangement of the triad create a lower-energy pathway?",
+      "What roles do the nucleophile, base, and stabilizer play in lowering Ea?",
+      "Why is the uncatalyzed hydrolysis so slow (high-energy intermediates)?",
+      "What does 'stabilizing the transition state' mean for the rate?"
+    ]
+  },
+  "84": {
+    "misconception": "Not connecting 'rate doubles when intensity doubles' to a first-order (linear) dependence.",
+    "probes": [
+      "What does a proportional (doubling-with-doubling) relationship imply about the reaction order in light intensity?",
+      "Why does single-photon absorption per dimer give first-order behavior?",
+      "How would you express the rate law in terms of photon flux?",
+      "What would a quadratic (two-photon) dependence look like instead?"
+    ]
+  },
+  "85": {
+    "misconception": "Thinking the chlorine radical is used up, not regenerated in a catalytic cycle.",
+    "probes": [
+      "Walk through the cycle: Cl reacts with O3 to form ClO, which reacts to regenerate Cl.",
+      "Why does regeneration let one chlorine atom destroy many ozone molecules?",
+      "What defines a catalyst here (not consumed overall)?",
+      "Why does this make even trace CFC-derived chlorine so damaging?"
+    ]
+  },
+  "86": {
+    "misconception": "Citing concentration vaguely without invoking collision frequency (collision theory).",
+    "probes": [
+      "Why does a higher ethanol concentration increase the collision frequency with membrane lipids?",
+      "How does collision theory connect that to a faster rate?",
+      "Why is there a minimum effective concentration (~60%)?",
+      "Distinguish collision frequency from the fraction of collisions that are effective."
+    ]
+  },
+  "87": {
+    "misconception": "Expecting a linear rate-temperature relationship, missing the exponential Arrhenius dependence.",
+    "probes": [
+      "Why does a modest temperature rise produce a large rate increase (exponential dependence)?",
+      "How does temperature change the fraction of molecules exceeding the activation energy?",
+      "Write and interpret k = A e^(-Ea/RT).",
+      "Why do high-activation-energy reactions show the steepest temperature sensitivity?"
+    ]
+  },
+  "88": {
+    "misconception": "Thinking binding changes the drug chemically, not recognizing slow dissociation as a rate-limiting protective step.",
+    "probes": [
+      "Why does binding to albumin shield the drug from degradation and clearance?",
+      "How does slow dissociation act as a rate-limiting step controlling free-drug availability?",
+      "Why does that extend the effective half-life?",
+      "Distinguish the equilibrium of binding from the kinetics of release."
+    ]
+  },
+  "89": {
+    "misconception": "Assuming nuclear decay responds to temperature, pressure, or chemistry like an ordinary reaction.",
+    "probes": [
+      "Why is radioactive decay governed by nuclear forces, not electron-shell interactions?",
+      "Why don't temperature and pressure (which affect collisions and Ea) change the decay constant?",
+      "What does a constant half-life imply for the rate law (first-order, fixed k)?",
+      "Why does this make radiocarbon dating reliable?"
+    ]
+  },
+  "90": {
+    "misconception": "Not attributing the speedup to a lowered activation energy via transition-state stabilization.",
+    "probes": [
+      "Why is uncatalyzed amide hydrolysis so slow (high barrier, water is a poor nucleophile)?",
+      "How does the enzyme's preorganized active site lower the activation energy?",
+      "Why does lowering Ea translate into an orders-of-magnitude rate increase?",
+      "Connect to resistance: why does faster drug destruction confer survival?"
+    ]
+  },
+
+  "91": {
+    "misconception": "Confusing which form predominates below the pKa, or not linking molecular charge to lipid penetration.",
+    "probes": [
+      "Using HA <-> H+ + A-, why does a pH below the pKa favor the neutral HA form?",
+      "Why does the uncharged form penetrate the lipid-rich skin layer more easily?",
+      "Describe how the HA fraction varies with pH relative to the pKa (Henderson-Hasselbalch).",
+      "What happens to penetration well above the pKa?"
+    ]
+  },
+  "92": {
+    "misconception": "Treating glycine as neutral at pH 7, not recognizing simultaneous carboxyl deprotonation and amino protonation.",
+    "probes": [
+      "Compare the carboxyl pKa (~2.3) and amino pKa (~9.6) to pH 7 - what is each group's state?",
+      "Why does the carboxyl lose its proton while the amino group gains one at neutral pH?",
+      "Why does this produce a net-neutral but doubly charged zwitterion?",
+      "Predict the dominant form at very low and very high pH."
+    ]
+  },
+  "93": {
+    "misconception": "Thinking a buffer has unlimited capacity, not recognizing depletion of the conjugate base.",
+    "probes": [
+      "How does the carbonate/bicarbonate buffer neutralize added acid (the conjugate base consumes H+)?",
+      "Why does continuous CO2 input deplete the available carbonate?",
+      "Why does buffer capacity have a limit, after which the pH drops?",
+      "Connect to ocean acidification trends over time."
+    ]
+  },
+  "94": {
+    "misconception": "Assuming acid always stabilizes, without the mechanism (suppressing base-catalyzed decomposition via HOO-).",
+    "probes": [
+      "What initiates base-catalyzed H2O2 decomposition (deprotonation to HOO-)?",
+      "Why does low pH suppress formation of the reactive HOO- anion?",
+      "Why does less HOO- mean slower decomposition?",
+      "Predict the stability at high pH and explain."
+    ]
+  },
+  "95": {
+    "misconception": "Thinking the proton itself is colored, rather than that protonation changes the chromophore's conjugation.",
+    "probes": [
+      "How does gaining or losing a proton change the extent of conjugation in the chromophore?",
+      "Why does changing the conjugation length change which wavelengths are absorbed?",
+      "Why does that shift the perceived color?",
+      "Why does this make the dye useful as an acid-base indicator?"
+    ]
+  },
+  "96": {
+    "misconception": "Not using the pKa to reason about the HOCl:OCl- ratio, or thinking any acidic pH is equivalent.",
+    "probes": [
+      "With a pKa of ~7.5, what is the HOCl:OCl- ratio right at pH 7.5 (about 50:50)?",
+      "Why does staying slightly below the pKa keep most of the chlorine as HOCl?",
+      "Why is HOCl the more effective germicide (neutral, penetrates membranes)?",
+      "Use Henderson-Hasselbalch to compare the HOCl fraction at pH 7.2 versus 7.8."
+    ]
+  },
+  "97": {
+    "misconception": "Not connecting each buffering plateau to a pKa (a 50:50 protonation of a specific group).",
+    "probes": [
+      "Why does each plateau occur near the pKa of a different ionizable group?",
+      "What is the protonation state (about 50:50) at each plateau?",
+      "Which group titrates first (the carboxyl) and which second (the ammonium), and why?",
+      "How does the curve reveal the number of ionizable groups?"
+    ]
+  },
+  "98": {
+    "misconception": "Assuming more acid concentration alone widens buffering, not recognizing multiple distinct pKa values.",
+    "probes": [
+      "Why do three carboxyl groups give three different pKa values?",
+      "How do overlapping buffer regions widen the total effective pH range?",
+      "Why can't a monoprotic acid buffer over as wide a range at the same concentration?",
+      "Where, relative to each pKa, is the buffering strongest?"
+    ]
+  },
+  "99": {
+    "misconception": "Not linking low-pH protonation to molecular charge and reduced lipid solubility.",
+    "probes": [
+      "Why does very low pH protonate niacinamide's ring nitrogen?",
+      "Why does a positive charge reduce solubility in the nonpolar stratum corneum?",
+      "Why does that hinder transdermal absorption?",
+      "Why is pH 5-6 a reasonable formulation compromise?"
+    ]
+  },
+  "100": {
+    "misconception": "Not connecting protonation to reduced volatility and harshness while keeping the nicotine concentration high.",
+    "probes": [
+      "Why is free-base nicotine volatile and harsh at high concentration (basic, readily vaporizes)?",
+      "How does benzoic acid protonate it into a less volatile salt?",
+      "Why does the salt form reduce throat harshness while keeping the nicotine concentrated?",
+      "How does pH relate to the free-base / salt balance?"
     ]
   }
 }
