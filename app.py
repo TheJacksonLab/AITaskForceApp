@@ -553,8 +553,10 @@ def get_examiner_response(
             messages.append({"role": "assistant", "content": turn["content"]})
         else:
             messages.append({"role": "user", "content": turn["content"]})
+    # Live examiner uses a stronger model than the mini helpers: it must reliably
+    # follow the anchoring, progression, and length rules across an adaptive dialogue.
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1",
         messages=messages,
         timeout=45.0,
     )
@@ -1008,20 +1010,29 @@ elif exam_state == "in_progress":
         conversation.append({"role": "student", "content": transcript_text})
         new_count = exchange_count + 1
 
-        # Always get the examiner's response — on the final turn the ENDING THE
-        # EXAMINATION rule in the system prompt causes it to close the exam warmly
-        # instead of asking again.
-        with st.spinner("Examiner is thinking..."):
-            try:
-                follow_up = get_examiner_response(
-                    client, conversation, new_count,
-                    TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
-                    question,
-                )
-                conversation.append({"role": "examiner", "content": follow_up})
-            except Exception as e:
-                st.error(f"❌ Failed to get examiner response: {str(e)}")
-                st.stop()
+        if new_count >= MAX_EXCHANGES:
+            # Final turn: close deterministically instead of asking the model for a
+            # closing line. The examiner model tended to ask another (unanswerable)
+            # question here rather than wrap up, so we append a fixed close and grade.
+            conversation.append({
+                "role": "examiner",
+                "content": (
+                    "Thank you — that brings us to the end of the examination. "
+                    "I appreciate your responses; your results are being prepared now."
+                ),
+            })
+        else:
+            with st.spinner("Examiner is thinking..."):
+                try:
+                    follow_up = get_examiner_response(
+                        client, conversation, new_count,
+                        TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
+                        question,
+                    )
+                    conversation.append({"role": "examiner", "content": follow_up})
+                except Exception as e:
+                    st.error(f"❌ Failed to get examiner response: {str(e)}")
+                    st.stop()
 
         st.session_state["conversation"] = conversation
         st.session_state["exchange_count"] = new_count
