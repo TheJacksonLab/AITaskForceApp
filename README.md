@@ -4,7 +4,7 @@
 
 ## Features
 - 🎤 Audio recording with cloud-based **AssemblyAI** transcription
-- 🤖 Dynamic 6-turn oral dialogue powered by **OpenAI gpt-4.1** (examiner) + **o3-mini** (final grading)
+- 🤖 Dynamic 6-turn oral dialogue powered by **OpenAI gpt-5.1** (examiner + final grading)
 - 📊 Holistic scoring with trajectory tracking (improving / consistent strong / consistent weak / declining / mixed)
 - 🌐 Hosted on Streamlit Cloud for easy sharing
 - 📋 Results logged to Google Sheets for instructor review
@@ -70,11 +70,12 @@ Each exam consists of up to **6 student turns**. The opening question is served 
 
 | Service | Usage per exam | Estimated cost |
 |---------|---------------|----------------|
-| **OpenAI gpt-4.1** | Up to 5 adaptive examiner follow-ups | ~$0.02–0.05 |
+| **OpenAI gpt-5.1** | Up to 5 adaptive examiner follow-ups + 1 final grading call | ~$0.03 |
 | **OpenAI gpt-4o-mini** | Per-turn annotation + study-advice generation | ~$0.001–0.003 |
-| **OpenAI o3-mini** | 1 final holistic grading call (full transcript) | ~$0.01–0.02 |
 | **AssemblyAI** | Up to 6 audio responses (~4–5 min total audio) | ~$0.02–0.03 |
-| **Total** | | **~$0.05–0.10 per exam** |
+| **Total** | | **~$0.05–0.06 per exam** |
+
+> Cost figures are approximate (measured token counts × list prices at time of writing). Verify current model pricing at [platform.openai.com](https://platform.openai.com).
 
 Free tiers:
 - **AssemblyAI:** 100 hours/month free — covers ~1,200 exams/month

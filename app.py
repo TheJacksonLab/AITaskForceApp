@@ -591,7 +591,7 @@ def get_examiner_response(
     def _generate(msgs):
         # Live examiner uses a stronger model than the mini helpers: it must reliably
         # follow the anchoring, progression, and length rules across an adaptive dialogue.
-        resp = client.chat.completions.create(model="gpt-4.1", messages=msgs, timeout=45.0)
+        resp = client.chat.completions.create(model="gpt-5.1", messages=msgs, timeout=45.0)
         return resp.choices[0].message.content.strip()
 
     out = _generate(messages)
@@ -757,7 +757,7 @@ def grade_conversation(
         "Respond with ONLY the JSON object, no additional text."
     )
     response = client.chat.completions.create(
-        model="o3-mini",
+        model="gpt-5.1",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
