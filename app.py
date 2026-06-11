@@ -48,7 +48,9 @@ if not assemblyai_api_key:
     st.stop()
 
 try:
-    client = OpenAI(api_key=openai_api_key)
+    # max_retries adds exponential backoff on transient errors (notably 429 rate
+    # limits under concurrent load), so a student's exam isn't killed mid-way.
+    client = OpenAI(api_key=openai_api_key, max_retries=5)
 except Exception as e:
     st.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
     st.stop()
@@ -718,18 +720,33 @@ def grade_conversation(
         "MUST be low (1-4) and the feedback must state plainly that too little was "
         "demonstrated to judge deeper understanding. Do not be congratulatory in this case.\n\n"
         "GRADING PHILOSOPHY:\n"
-        "- Evaluate the student's understanding across the ENTIRE conversation, not just their first response.\n"
-        "- Reward trajectory: a student who started uncertain but meaningfully improved should score "
-        "better than one who stayed confused throughout.\n"
-        "- Reward intellectual honesty and self-correction.\n"
-        "- Penalize persistent, uncorrected misconceptions more than early confusion followed by recovery.\n"
+        "- Credit only the understanding the student demonstrated through THEIR OWN reasoning. "
+        "Do NOT credit ideas, terms, or steps that the examiner's questions supplied or led them to.\n"
+        "- Use the FULL 1-10 range and apply the bands below literally. Do NOT default to high "
+        "scores: an ordinary performance is not a 9-10. Reserve 9-10 for genuinely exceptional, "
+        "independent mastery, which is uncommon.\n"
+        "- Trajectory, effort, and engagement are only minor tie-breakers between otherwise-adjacent "
+        "scores — never a way to lift a weak performance. Improvement that happened ONLY because the "
+        "examiner walked the student there step by step is NOT evidence of independent understanding.\n"
+        "- Hedging or guessing that happens to land near a correct idea (\"I think\", \"maybe\", "
+        "\"I'm not sure\", \"I can't remember the equation\") is NOT mastery and caps the score in "
+        "the lower-middle bands.\n"
+        "- Inability to recall or apply the governing fundamentals (e.g. the relevant equation or "
+        "balanced reaction), even if the student eventually stumbles toward them after prompting, "
+        "caps the score at 4 or below.\n"
+        "- Reward intellectual honesty and self-correction, but only as a tie-breaker.\n"
+        "- Penalize persistent, uncorrected misconceptions.\n"
         "- Do not penalize a student for asking clarifying questions about the question itself.\n\n"
-        "SCORING GUIDE:\n"
-        "- 9-10: Consistently accurate, strong reasoning, excellent terminology, shows real depth\n"
-        "- 7-8: Mostly accurate with minor gaps, good reasoning, clear improvement arc\n"
-        "- 5-6: Partial understanding, some correct elements, struggled but showed effort and engagement\n"
-        "- 3-4: Limited understanding, significant misconceptions, minimal improvement over exchanges\n"
-        "- 1-2: Fundamental misunderstanding throughout, no meaningful engagement\n\n"
+        "SCORING GUIDE (use the whole range; most students are not 9-10):\n"
+        "- 9-10: Exceptional. Independently accurate and precise throughout, strong reasoning, correct "
+        "terminology, real depth; little or no prompting needed.\n"
+        "- 7-8: Strong. Mostly accurate and largely independent; correct core reasoning with only minor "
+        "gaps or imprecision.\n"
+        "- 5-6: Partial. Grasps the basic idea and some correct elements, but with real gaps, vagueness, "
+        "or an error, and needed noticeable prompting; little depth.\n"
+        "- 3-4: Weak. Major gaps or misconceptions; could not recall or apply the governing fundamentals "
+        "even with prompting; only fragmentary correct pieces, often via guessing.\n"
+        "- 1-2: No meaningful understanding or engagement.\n\n"
         "Respond in valid JSON with exactly these four keys:\n"
         '- "Score" (integer 1-10)\n'
         '- "Feedback" (string, 2-3 sentences: what they did well, what they struggled with, overall assessment)\n'
