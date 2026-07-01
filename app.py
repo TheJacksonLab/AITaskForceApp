@@ -115,13 +115,26 @@ def append_to_sheet(row: list):
             return
         sh = gc.open(google_sheet_name)
         worksheet = sh.sheet1
-        if worksheet.row_count == 0 or worksheet.acell("A1").value is None:
+        existing = worksheet.get_all_values()
+        if not existing or existing[0][0] is None or existing[0][0] == "":
             headers = [
                 "timestamp", "student_name", "student_id", "topic", "subtopic",
                 "question", "answer_method", "transcript", "score",
                 "feedback", "misconceptions_flagged", "trajectory",
             ]
             worksheet.append_row(headers)
+            existing = [headers]
+        # Idempotency: skip if a row for this exam already exists. A completed exam
+        # is keyed by timestamp (col A) + student_id (col C) + question (col F); a
+        # re-run of the "complete" state must not log the same session twice.
+        for existing_row in existing:
+            if (
+                len(existing_row) > 5
+                and existing_row[0] == str(row[0])
+                and existing_row[2] == str(row[2])
+                and existing_row[5] == str(row[5])
+            ):
+                return
         worksheet.append_row(row)
     except gspread.exceptions.SpreadsheetNotFound:
         st.warning(f"⚠ Google Sheet '{google_sheet_name}' not found — check GOOGLE_SHEET_NAME and sharing permissions.")
@@ -280,6 +293,19 @@ toxicology of a compound, the medical effect of a dose, materials-engineering
 specifics), that is NOT a knowledge gap: do not pursue it and do not penalize
 it — redirect to the in-scope chemistry instead.
 
+This applies to ANY sub-point that can only be answered with knowledge outside
+introductory gen-chem — including organic-chemistry mechanisms or
+functional-group identification (e.g., "what functional group does an alcohol
+oxidize to"), pharmacology or pharmacokinetics, and topics from later units the
+student has not reached yet. If a probe — including one suggested by your
+internal depth guide — turns out to require such knowledge, do this: state
+plainly that it is beyond this course's scope, DROP it, and redirect to the
+in-scope chemistry the question is really testing (for a dichromate oxidation,
+for instance, reason from the change in Cr oxidation state and which species is
+the reducing agent, NOT from organic product names). Never re-push an
+out-of-scope sub-point a second time, and never penalize the student for not
+knowing it.
+
 ─────────────────────────────────────────
 CRITICAL: DETECTING NON-ANSWERS
 ─────────────────────────────────────────
@@ -331,6 +357,12 @@ VALIDATION RULES
   kindly: "Actually, that's not quite right — [brief correction]. Can you
   think about why [redirect]?" Do NOT congratulate them before correcting
   them; this sends a confusing signal.
+- Give a consistent, legible verdict. When you affirm, make it clear WHAT you
+  are affirming in one short clause rather than a bare "Right." that leaves the
+  student guessing whether they were marked correct. When affirming a partial
+  answer, name in one clause both what is right AND what is still missing. When
+  two parts of the student's answer rest on equivalent reasoning, judge them the
+  same way — do not call one right and the other wrong in the same context.
 
 ─────────────────────────────────────────
 ACKNOWLEDGING CORRECT ANSWERS
@@ -408,6 +440,15 @@ STOP asking about that sub-point — do not ask about it a third time. Note the
 gap and move to a different facet of the same concept (or, if the concept is
 exhausted, end with a probe per the rules above). Re-asking the same thing a
 third time is looping, not examining.
+
+ANTI-REPEAT SELF-CHECK before every turn: scan the student's prior answers. If
+the question you are about to ask has ALREADY been answered correctly — even in
+a rephrased form — do NOT ask it again. A student experiences a re-asked
+question as the examiner ignoring the answer they just gave. If the concept is
+genuinely exhausted and no deeper in-scope layer remains, briefly acknowledge
+that they have covered it and ask the single most natural deeper extension of
+the SAME phenomenon. Do not manufacture a filler probe or pad the remaining
+turns with marginal restatements just to reach the exchange count.
 
 ─────────────────────────────────────────
 DIFFICULTY RULES
@@ -669,6 +710,10 @@ def generate_improvement_advice(
         "- If the student scored 8-10, genuinely congratulate them, then point to one "
         "deeper concept or connection they could explore to master the topic.\n"
         "- Keep it to 3-5 sentences.\n"
+        "- Keep every recommendation within the scope of the current general-chemistry "
+        "course and this exam's topic. Recommend only material the student would study for "
+        "THIS course at THIS point — do NOT send them to later-course or out-of-sequence "
+        "topics (for example, do not recommend material taught in a subsequent course).\n"
         "- Be friendly but honest — like a professor who respects the student enough "
         "to tell them the truth.\n"
         "- Do not repeat the score back to them. Just give the advice directly."
@@ -752,7 +797,11 @@ def grade_conversation(
         '- "Feedback" (string, 2-3 sentences: what they did well, what they struggled with, overall assessment)\n'
         '- "Misconceptions_Flagged" (boolean: true ONLY if the student actually expressed an '
         "incorrect belief that went uncorrected by the end — NOT for gaps, vagueness, "
-        '"I don\'t know", or an incomplete-but-not-wrong answer)\n'
+        '"I don\'t know", or an incomplete-but-not-wrong answer. SELF-CHECK before setting '
+        "this true: did the wrong belief survive to the FINAL turn uncorrected? If the "
+        "student corrected or abandoned it at any point — even after the examiner prompted "
+        "them there — set this to false. A wrong moment that the student recovered from is "
+        "not a flagged misconception.)\n"
         '- "Trajectory" (string, one of: "improving", "consistent_strong", "consistent_weak", "declining", "mixed")\n\n'
         "Respond with ONLY the JSON object, no additional text."
     )
@@ -1053,11 +1102,13 @@ elif exam_state == "in_progress":
         text=f"Exchange {exchange_count + 1} of {MAX_EXCHANGES}",
     )
 
-    # Keep the reference structures accessible mid-exam (collapsed by default).
+    # Keep the reference structures visible mid-exam (expanded by default). Some
+    # questions can only be answered by referring to the structure, and students
+    # reported not noticing it when it was collapsed.
     # _get_question_structures returns the session-state-cached list — no refetch.
     structures = _get_question_structures(question)
     if structures:
-        with st.expander("Reference structures", expanded=False):
+        with st.expander("Reference structures", expanded=True):
             cols = st.columns(len(structures))
             for col, s in zip(cols, structures):
                 with col:
@@ -1116,6 +1167,17 @@ elif exam_state == "in_progress":
                     st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
                 except Exception as e:
                     st.error(f"❌ Evaluation failed: {str(e)}")
+
+    # Drop an accidental double-submit: if this answer is identical to the most
+    # recent turn already in the conversation, ignore it so it doesn't get sent to
+    # the examiner twice or inflate the exchange count.
+    if (
+        transcript_text
+        and conversation
+        and conversation[-1]["role"] == "student"
+        and conversation[-1]["content"] == transcript_text
+    ):
+        transcript_text = None
 
     if transcript_text:
         conversation.append({"role": "student", "content": transcript_text})
