@@ -129,7 +129,10 @@ with st.sidebar:
         _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json")
         with open(_cfg_path) as _f:
             _cfg = _json.load(_f)
-        st.caption(f"Exchanges per exam: {_cfg.get('max_exchanges', 6)}")
+        st.caption(
+            f"Exchanges per exam: {_cfg.get('min_exchanges', 3)}–{_cfg.get('max_exchanges', 6)} "
+            "(early close when concept exhausted)"
+        )
         st.caption(f"Course: {_cfg.get('course_name', '—')}")
         _topics = _cfg.get("enabled_topics", [])
         st.caption(f"Active topics: {len(_topics)}")

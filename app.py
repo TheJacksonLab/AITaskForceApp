@@ -241,6 +241,14 @@ TOPIC_INSTRUCTIONS = {
 
 
 MAX_EXCHANGES = CONFIG.get("max_exchanges", 6)
+# Soft floor for early close: the examiner may signal "concept exhausted" only
+# once the student has given at least this many answers, so a single strong
+# response can't cut the exam short.
+MIN_EXCHANGES = CONFIG.get("min_exchanges", 3)
+# Structured sentinel the examiner emits to end early when the concept is fully
+# covered. It is app-handled (stripped, then routed to the deterministic close),
+# NOT natural-language closing prose — see get_examiner_response / the state machine.
+CONCEPT_EXHAUSTED_TOKEN = "[[CONCEPT_EXHAUSTED]]"
 
 EXAMINER_SYSTEM_PROMPT = """\
 You are an oral examiner for an undergraduate general chemistry course (CHEM202).
@@ -507,6 +515,30 @@ exam. You are not cold or adversarial, but you are not a cheerleader either.
   inside praise sandwiches.
 
 ─────────────────────────────────────────
+EARLY CLOSE (CONCEPT EXHAUSTED)
+─────────────────────────────────────────
+
+Normally you continue until the final turn. There is ONE exception: if the
+student has fully and correctly resolved the opening question AND every
+worthwhile deeper in-scope layer of the SAME concept — so that any further
+question would be padding or would drift to a new concept — you may signal that
+the concept is exhausted instead of asking another question.
+
+You may do this ONLY once current_exchange is at least {min_exchanges}. Before
+that, keep probing — do not signal early no matter how strong the student is.
+
+To signal it, output one short sentence acknowledging their mastery of the
+concept, then the token {exhausted_token} on its own at the very end. Do NOT
+write any other closing, wrap-up, or "examination complete" prose, and do NOT
+ask a new question in that turn. Example:
+  "You've handled every layer of this concept cleanly. {exhausted_token}"
+
+Use this sparingly and honestly: only for genuine, independent, complete mastery
+of the WHOLE concept — never to reward a single good answer, and never as a way
+to escape a struggling exchange. If any worthwhile in-scope layer remains, ask
+about it instead of signalling.
+
+─────────────────────────────────────────
 ENDING THE EXAMINATION
 ─────────────────────────────────────────
 
@@ -515,9 +547,12 @@ You are responding to student response {current_exchange} of {max_exchanges}.
 - On any NON-FINAL turn (current_exchange < max_exchanges): you are FORBIDDEN
   from producing any closing, wrap-up, or "the examination is complete" /
   "thank you for your responses" language. Every non-final turn MUST end with a
-  question or probe that moves the exam forward. Do not tell the student the
-  exam is over, do not thank them as if finishing, do not signal that this is
-  the last question — even if the current line of questioning feels resolved.
+  question or probe that moves the exam forward — UNLESS you are emitting the
+  concept-exhausted signal from EARLY CLOSE above, which is the only permitted
+  way to end before the final turn and uses the {exhausted_token} token, not
+  closing prose. Do not tell the student the exam is over, do not thank them as
+  if finishing, do not signal that this is the last question — even if the
+  current line of questioning feels resolved.
 - ONLY when current_exchange == max_exchanges may you close. On that final turn
   you must NOT ask a new question: thank the student for their responses and let
   them know the examination is now complete.
@@ -608,6 +643,19 @@ def _looks_like_closing(text: str) -> bool:
     return any(m in t for m in _CLOSING_MARKERS)
 
 
+def _strip_exhausted_token(text: str) -> tuple[str, bool]:
+    """Detect and remove the examiner's early-close sentinel.
+
+    Returns (cleaned_text, exhausted) where exhausted is True if the
+    CONCEPT_EXHAUSTED_TOKEN was present. Matching is case-insensitive; any
+    acknowledgment sentence the examiner placed before the token is preserved.
+    """
+    if CONCEPT_EXHAUSTED_TOKEN.lower() not in text.lower():
+        return text, False
+    pattern = re.compile(re.escape(CONCEPT_EXHAUSTED_TOKEN), re.IGNORECASE)
+    return pattern.sub("", text).strip(), True
+
+
 def get_examiner_response(
     client, conversation: list, exchange_count: int, topic_instruction: str,
     opening_question: str,
@@ -617,6 +665,8 @@ def get_examiner_response(
         topic_instruction=topic_instruction,
         current_exchange=exchange_count,
         max_exchanges=MAX_EXCHANGES,
+        min_exchanges=MIN_EXCHANGES,
+        exhausted_token=CONCEPT_EXHAUSTED_TOKEN,
         opening_question=opening_question,
     )
     depth_guide = _format_depth_guide(opening_question)
@@ -636,6 +686,11 @@ def get_examiner_response(
         return resp.choices[0].message.content.strip()
 
     out = _generate(messages)
+    # An early-close signal (the concept-exhausted sentinel) is a legitimate,
+    # app-handled end — not the premature natural-language closing the guard below
+    # is meant to catch — so pass it straight through for the caller to act on.
+    if CONCEPT_EXHAUSTED_TOKEN.lower() in out.lower():
+        return out
     # Guard: this is a non-final turn, so the examiner must not close. If a student
     # tried to quit and the model improvised a wrap-up, retry once with a hard
     # instruction, then fall back to a deterministic redirect.
@@ -1183,18 +1238,11 @@ elif exam_state == "in_progress":
         conversation.append({"role": "student", "content": transcript_text})
         new_count = exchange_count + 1
 
-        if new_count >= MAX_EXCHANGES:
-            # Final turn: close deterministically instead of asking the model for a
-            # closing line. The examiner model tended to ask another (unanswerable)
-            # question here rather than wrap up, so we append a fixed close and grade.
-            conversation.append({
-                "role": "examiner",
-                "content": (
-                    "Thank you — that brings us to the end of the examination. "
-                    "I appreciate your responses; your results are being prepared now."
-                ),
-            })
-        else:
+        # Close when the hard cap is reached, or early if the examiner signals the
+        # concept is exhausted (soft cap) — but never before MIN_EXCHANGES answers.
+        should_close = new_count >= MAX_EXCHANGES
+
+        if not should_close:
             with st.spinner("Examiner is thinking..."):
                 try:
                     follow_up = get_examiner_response(
@@ -1202,17 +1250,41 @@ elif exam_state == "in_progress":
                         TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
                         question,
                     )
-                    conversation.append({"role": "examiner", "content": follow_up})
                 except Exception as e:
                     st.error(f"❌ Failed to get examiner response: {str(e)}")
                     st.stop()
+            follow_up, exhausted = _strip_exhausted_token(follow_up)
+            if exhausted and new_count >= MIN_EXCHANGES:
+                # Examiner judged the concept fully covered — end early via the
+                # same deterministic close used at the hard cap.
+                should_close = True
+            elif not follow_up:
+                # Sentinel fired below the floor (or the model returned only the
+                # token) — don't strand the student on an empty turn; re-anchor.
+                conversation.append({"role": "examiner", "content": (
+                    f"Let's go one level deeper on the same idea. {question} "
+                    "What is the reasoning behind your answer?"
+                )})
+            else:
+                conversation.append({"role": "examiner", "content": follow_up})
+
+        if should_close:
+            # Close deterministically instead of asking the model for a closing
+            # line (it tended to ask another unanswerable question here).
+            conversation.append({
+                "role": "examiner",
+                "content": (
+                    "Thank you — that brings us to the end of the examination. "
+                    "I appreciate your responses; your results are being prepared now."
+                ),
+            })
 
         st.session_state["conversation"] = conversation
         st.session_state["exchange_count"] = new_count
 
-        if new_count >= MAX_EXCHANGES:
-            # All exchanges done — grade the full conversation immediately
-            with st.spinner("Evaluating your performance across all exchanges..."):
+        if should_close:
+            # Grade the full conversation immediately
+            with st.spinner("Evaluating your performance..."):
                 try:
                     evaluation = grade_conversation(
                         client, conversation, resolved_topic, question

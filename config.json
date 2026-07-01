@@ -1,5 +1,6 @@
 {
   "max_exchanges": 6,
+  "min_exchanges": 3,
   "course_name": "CHEM 202",
   "enabled_topics": [
     "Stoichiometry",
