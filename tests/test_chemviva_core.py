@@ -12,6 +12,8 @@ from chemviva_core import (
     claim_turn,
     completion_metrics,
     count_scaffolding,
+    daily_sheet_title,
+    deserialize_sheet_values,
     normalize_math_delimiters,
     release_turn,
     serialize_sheet_row,
@@ -130,6 +132,35 @@ class FormattingAndLoggingTests(unittest.TestCase):
             serialized[SHEET_COLUMNS.index("answer_method")], "dialogue-typed"
         )
         self.assertEqual(serialized[-1], SCHEMA_VERSION)
+
+    def test_daily_sheet_title_uses_chicago_calendar_date(self):
+        # 04:30 UTC on Sept. 19 is still 11:30 PM on Sept. 18 in Chicago.
+        self.assertEqual(
+            daily_sheet_title(
+                "2025-09-19T04:30:00+00:00", "America/Chicago"
+            ),
+            "2025-09-18",
+        )
+
+    def test_legacy_and_headerless_sheet_rows_are_preserved(self):
+        stale_header = [
+            "timestamp", "student_name", "student_id", "topic", "style",
+            "question", "answer_method", "transcript", "score", "feedback",
+            "misconceptions_flagged", "",
+        ]
+        historical_row = [
+            "2025-09-18T15:00:00+00:00", "Student", "123", "Gases", "Gases",
+            "Question", "dialogue-typed", "Transcript", "8", "Feedback",
+            "False", "consistent_strong",
+        ]
+        records = deserialize_sheet_values([stale_header, historical_row])
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["subtopic"], "Gases")
+        self.assertEqual(records[0]["trajectory"], "consistent_strong")
+        self.assertEqual(records[0]["completion_status"], "")
+
+        headerless_records = deserialize_sheet_values([historical_row])
+        self.assertEqual(headerless_records[0]["student_id"], "123")
 
     def test_scaffolding_counts_ignore_unknown_values(self):
         counts = count_scaffolding(

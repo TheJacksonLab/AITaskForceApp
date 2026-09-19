@@ -22,6 +22,7 @@ from chemviva_core import (
     claim_turn,
     completion_metrics,
     count_scaffolding,
+    daily_sheet_title,
     empty_scaffolding_counts,
     grade_conversation,
     normalize_conversation,
@@ -110,6 +111,25 @@ def get_gspread_client():
         return None
 
 
+def _get_or_create_daily_worksheet(spreadsheet, title: str):
+    """Return today's worksheet, creating it safely on the first submission."""
+    try:
+        return spreadsheet.worksheet(title)
+    except gspread.exceptions.WorksheetNotFound:
+        try:
+            worksheet = spreadsheet.add_worksheet(
+                title=title,
+                rows=1000,
+                cols=max(26, len(SHEET_COLUMNS)),
+            )
+            LOGGER.warning("Created daily Google Sheet tab '%s'", title)
+            return worksheet
+        except gspread.exceptions.APIError:
+            # Two students can finish simultaneously on the first exam of the
+            # day. If the other request created the tab first, fetch and reuse it.
+            return spreadsheet.worksheet(title)
+
+
 def append_to_sheet(row: dict):
     """
     Append a single row to the Google Sheet.
@@ -122,7 +142,11 @@ def append_to_sheet(row: dict):
         if gc is None:
             return
         sh = gc.open(google_sheet_name)
-        worksheet = sh.sheet1
+        worksheet_title = daily_sheet_title(
+            row.get("timestamp", ""),
+            CONFIG.get("sheet_timezone", "America/Chicago"),
+        )
+        worksheet = _get_or_create_daily_worksheet(sh, worksheet_title)
         expected_headers = list(SHEET_COLUMNS)
         current_headers = worksheet.row_values(1)
         if current_headers != expected_headers:

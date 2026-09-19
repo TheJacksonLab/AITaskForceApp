@@ -6,7 +6,9 @@ import json
 import re
 import threading
 from collections.abc import Mapping, MutableMapping
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 # Typed-only is a deliberate CHEM 202 course policy. Voice input must not be
@@ -277,3 +279,45 @@ def grade_conversation(
 def serialize_sheet_row(row: Mapping[str, Any]) -> list[Any]:
     """Serialize a named row in exactly the shared sheet-column order."""
     return [row.get(column, "") for column in SHEET_COLUMNS]
+
+
+def daily_sheet_title(timestamp: str, timezone_name: str) -> str:
+    """Return an ISO date tab title in the configured course timezone."""
+    try:
+        normalized_timestamp = str(timestamp).strip().replace("Z", "+00:00")
+        recorded_at = datetime.fromisoformat(normalized_timestamp)
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        recorded_at = datetime.now(timezone.utc)
+
+    try:
+        course_timezone = ZoneInfo(timezone_name)
+    except Exception:
+        course_timezone = timezone.utc
+    return recorded_at.astimezone(course_timezone).date().isoformat()
+
+
+def deserialize_sheet_values(values: list[list[Any]]) -> list[dict[str, Any]]:
+    """Read canonical, stale-header, or headerless ChemViva worksheet values.
+
+    Historical sheets used the same positional first twelve fields even when
+    their header labels were stale or missing. Mapping by the canonical column
+    order preserves those rows while allowing new date tabs to use the expanded
+    schema.
+    """
+    if not values:
+        return []
+    first_cell = str(values[0][0]).strip().lower() if values[0] else ""
+    data_rows = values[1:] if first_cell == "timestamp" else values
+    records = []
+    for values_row in data_rows:
+        if not any(str(value).strip() for value in values_row):
+            continue
+        records.append(
+            {
+                column: values_row[index] if index < len(values_row) else ""
+                for index, column in enumerate(SHEET_COLUMNS)
+            }
+        )
+    return records

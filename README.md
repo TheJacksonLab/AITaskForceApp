@@ -7,7 +7,7 @@
 - 🤖 Dynamic 6-turn oral dialogue powered by **OpenAI gpt-5.1** (examiner + final grading)
 - 📊 Holistic scoring with trajectory tracking (improving / consistent strong / consistent weak / declining / mixed)
 - 🌐 Hosted on Streamlit Cloud for easy sharing
-- 📋 Results logged to Google Sheets for instructor review
+- 📋 Results logged to date-based Google Sheet tabs for instructor review
 
 ## Quick Start (Local Development)
 
@@ -53,6 +53,11 @@ Two optional policies live in `config.json`: `score_abandoned_sessions` controls
 whether zero-answer sessions write a numeric score to the sheet, and
 `verify_grader_feedback` enables a second chemistry-accuracy review of grader
 feedback for the instructor queue. Both default to `false`.
+
+New submissions are written to a worksheet tab named with the local course date
+(for example, `2025-09-18`). The `sheet_timezone` setting controls the boundary
+and defaults to `America/Chicago`. Existing legacy tabs are never moved or
+cleared; the instructor dashboard reads and combines them with all dated tabs.
 
 ## Deploy to Streamlit Cloud
 

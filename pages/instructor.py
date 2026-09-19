@@ -11,7 +11,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-from chemviva_core import SHEET_COLUMNS
+from chemviva_core import SHEET_COLUMNS, deserialize_sheet_values
 
 st.set_page_config(page_title="ChemViva — Instructor Dashboard", layout="wide")
 
@@ -79,10 +79,14 @@ def load_sheet_data() -> pd.DataFrame:
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open(GOOGLE_SHEET_NAME)
-    records = sh.sheet1.get_all_records()
+    records = []
+    for worksheet in sh.worksheets():
+        for record in deserialize_sheet_values(worksheet.get_all_values()):
+            record["sheet_tab"] = worksheet.title
+            records.append(record)
 
     if not records:
-        return pd.DataFrame(columns=list(SHEET_COLUMNS))
+        return pd.DataFrame(columns=[*SHEET_COLUMNS, "sheet_tab"])
 
     df = pd.DataFrame(records)
     for column in SHEET_COLUMNS:
@@ -173,7 +177,7 @@ with col4:
 st.subheader("All Submissions")
 st.dataframe(
     filtered_df[[
-        "timestamp", "student_name", "student_id", "topic", "subtopic",
+        "timestamp", "sheet_tab", "student_name", "student_id", "topic", "subtopic",
         "answer_method", "completion_status", "student_turns", "score",
         "misconceptions_flagged", "feedback_flagged_for_review", "feedback",
     ]],
