@@ -1,8 +1,8 @@
 import streamlit as st
 from openai import OpenAI
-import assemblyai as aai
 import html
 import json
+import logging
 import os
 import re
 import random
@@ -11,8 +11,27 @@ from dotenv import load_dotenv
 
 import gspread
 from google.oauth2.service_account import Credentials
+from gspread.utils import rowcol_to_a1
+
+from chemviva_core import (
+    ANSWER_METHOD,
+    SCHEMA_VERSION,
+    SHEET_COLUMNS,
+    append_closing_turn,
+    append_turn_if_expected,
+    claim_turn,
+    completion_metrics,
+    count_scaffolding,
+    empty_scaffolding_counts,
+    grade_conversation,
+    normalize_conversation,
+    normalize_math_delimiters,
+    release_turn,
+    serialize_sheet_row,
+)
 
 load_dotenv()
+st.set_page_config(page_title="ChemViva", layout="wide")
 
 
 def _load_config() -> dict:
@@ -24,6 +43,7 @@ def _load_config() -> dict:
         return {}
 
 CONFIG = _load_config()
+LOGGER = logging.getLogger(__name__)
 
 
 # ── Secret resolution: prefer st.secrets (Streamlit Cloud), fall back to env ──
@@ -34,17 +54,12 @@ def _get_secret(key: str):
         return os.getenv(key)
 
 
-openai_api_key     = _get_secret("OPENAI_API_KEY")
-assemblyai_api_key = _get_secret("ASSEMBLYAI_API_KEY")
-google_creds_str   = _get_secret("GOOGLE_SHEETS_CREDENTIALS")
-google_sheet_name  = _get_secret("GOOGLE_SHEET_NAME") or "ChemViva_OralExam_Submissions"
+openai_api_key    = _get_secret("OPENAI_API_KEY")
+google_creds_str  = _get_secret("GOOGLE_SHEETS_CREDENTIALS")
+google_sheet_name = _get_secret("GOOGLE_SHEET_NAME") or "ChemViva_OralExam_Submissions"
 
 if not openai_api_key:
     st.error("❌ OPENAI_API_KEY not found. Please set it in Streamlit secrets or .env file.")
-    st.stop()
-
-if not assemblyai_api_key:
-    st.error("❌ ASSEMBLYAI_API_KEY not found. Please set it in Streamlit secrets or .env file.")
     st.stop()
 
 try:
@@ -54,13 +69,6 @@ try:
 except Exception as e:
     st.error(f"❌ Failed to initialize OpenAI client: {str(e)}")
     st.stop()
-
-try:
-    aai.settings.api_key = assemblyai_api_key
-except Exception as e:
-    st.error(f"❌ Failed to initialize AssemblyAI: {str(e)}")
-    st.stop()
-
 
 # ── Google Sheets helpers ─────────────────────────────────────────────────────
 def get_gspread_client():
@@ -102,12 +110,12 @@ def get_gspread_client():
         return None
 
 
-def append_to_sheet(row: list):
+def append_to_sheet(row: dict):
     """
     Append a single row to the Google Sheet.
     Failures warn but never call st.stop() — logging must not break the exam.
-    Row order: timestamp, student_name, student_id, topic, subtopic, question,
-               answer_method, transcript, score, feedback, misconceptions_flagged, trajectory
+    The shared SHEET_COLUMNS tuple defines both the header and serialization
+    order, preventing schema and row construction from drifting independently.
     """
     try:
         gc = get_gspread_client()
@@ -115,14 +123,22 @@ def append_to_sheet(row: list):
             return
         sh = gc.open(google_sheet_name)
         worksheet = sh.sheet1
-        if worksheet.row_count == 0 or worksheet.acell("A1").value is None:
-            headers = [
-                "timestamp", "student_name", "student_id", "topic", "subtopic",
-                "question", "answer_method", "transcript", "score",
-                "feedback", "misconceptions_flagged", "trajectory",
-            ]
-            worksheet.append_row(headers)
-        worksheet.append_row(row)
+        expected_headers = list(SHEET_COLUMNS)
+        current_headers = worksheet.row_values(1)
+        if current_headers != expected_headers:
+            LOGGER.warning(
+                "Migrating Google Sheet header from %s to schema %s: %s",
+                current_headers,
+                SCHEMA_VERSION,
+                expected_headers,
+            )
+            header_width = max(len(current_headers), len(expected_headers))
+            end_cell = rowcol_to_a1(1, header_width)
+            worksheet.update(
+                range_name=f"A1:{end_cell}",
+                values=[expected_headers + [""] * (header_width - len(expected_headers))],
+            )
+        worksheet.append_row(serialize_sheet_row(row))
     except gspread.exceptions.SpreadsheetNotFound:
         st.warning(f"⚠ Google Sheet '{google_sheet_name}' not found — check GOOGLE_SHEET_NAME and sharing permissions.")
     except Exception as e:
@@ -371,6 +387,11 @@ RESPONSE LENGTH & DISCLOSURE BUDGET
   true about the liquid's vapor pressure at the moment it boils — what does
   lowering the external pressure do to that condition?"
 
+MATH FORMATTING: Prefer plain Unicode for simple formulas and species (for
+example CO₂, Fe₂O₃, NaN₃, Cr₂O₇²⁻). When LaTeX is genuinely needed, use
+$...$ for inline math and $$...$$ for display math. Never use \\(...\\) or
+\\[...\\] delimiters.
+
 ─────────────────────────────────────────
 SCAFFOLDING LIMITS (ANTI-TEACHING RULE)
 ─────────────────────────────────────────
@@ -382,13 +403,17 @@ Your job is to ASSESS, not to TEACH. When a student struggles:
   accessible.
 - You may give a SMALL directional hint (e.g., "Think about what happens
   to molecular motion when temperature changes").
-- You must NEVER explain the concept, provide the equation, name the
-  specific reaction or mechanism, define a term, or walk through the
-  reasoning. If you find yourself writing more than one sentence of
-  explanation, you are teaching, not examining.
+- You must NEVER explain the concept, supply a balanced equation or mole ratio,
+  provide a numerical constant, fill in a missing calculation step, name the
+  specific reaction or mechanism, define a term, or walk through the reasoning.
+  If you find yourself writing more than one sentence of explanation, you are
+  teaching, not examining.
 - If after TWO simplified follow-ups the student still cannot engage,
   note the gap and move to a different aspect of the topic. Do NOT
   keep providing increasingly detailed hints that converge on the answer.
+- If the student cannot produce a required fundamental after those attempts,
+  note that gap and move on. Do not hand over the fundamental to continue the
+  calculation.
 
 ─────────────────────────────────────────
 PROGRESSION
@@ -619,7 +644,7 @@ def get_examiner_response(
                 "Let's stay focused — the examination isn't over yet. Returning to the "
                 f"question: {opening_question} What is your reasoning?"
             )
-    return out
+    return normalize_math_delimiters(out)
 
 
 def generate_improvement_advice(
@@ -685,94 +710,15 @@ def generate_improvement_advice(
     return response.choices[0].message.content.strip()
 
 
-def grade_conversation(
-    client, conversation: list, topic: str, opening_question: str
-) -> dict:
-    """Holistically grade the full examination transcript."""
+def annotate_transcript(client, conversation: list, topic: str, evaluation: dict) -> dict:
+    """Return student-quality and examiner-scaffolding annotations."""
     student_turns = [t for t in conversation if t["role"] == "student"]
     if not student_turns:
-        # No answers were given (e.g. the exam was ended immediately). Skip the
-        # grader entirely — with an empty transcript it hallucinates a performance.
         return {
-            "Score": 1,
-            "Feedback": "No responses were provided, so there was nothing to assess. "
-                        "The examination was ended before any question was answered.",
-            "Misconceptions_Flagged": False,
-            "Trajectory": "consistent_weak",
+            "student_annotations": [],
+            "examiner_scaffolding": [],
+            "scaffolding_counts": empty_scaffolding_counts(),
         }
-    lines = []
-    for turn in conversation:
-        label = "Examiner" if turn["role"] == "examiner" else "Student"
-        lines.append(f"[{label}]: {turn['content']}")
-    transcript = "\n\n".join(lines)
-
-    system_prompt = (
-        f"You are a general chemistry professor grading an oral examination.\n\n"
-        f"TOPIC: {topic}\n"
-        f"OPENING QUESTION: {opening_question}\n\n"
-        "EVIDENCE DISCIPLINE (read first):\n"
-        "- Base your assessment ONLY on what the student actually wrote. Never credit, "
-        "assume, or invent reasoning the student did not express.\n"
-        "- The exam may have been ended early, so the transcript can be short. Grade only "
-        "the responses that are present; never reward a student for questions they did not "
-        "answer.\n"
-        "- If the student gave few responses, or responses with little substance, the score "
-        "MUST be low (1-4) and the feedback must state plainly that too little was "
-        "demonstrated to judge deeper understanding. Do not be congratulatory in this case.\n\n"
-        "GRADING PHILOSOPHY:\n"
-        "- Credit only the understanding the student demonstrated through THEIR OWN reasoning. "
-        "Do NOT credit ideas, terms, or steps that the examiner's questions supplied or led them to.\n"
-        "- Use the FULL 1-10 range and apply the bands below literally. Do NOT default to high "
-        "scores: an ordinary performance is not a 9-10. Reserve 9-10 for genuinely exceptional, "
-        "independent mastery, which is uncommon.\n"
-        "- Trajectory, effort, and engagement are only minor tie-breakers between otherwise-adjacent "
-        "scores — never a way to lift a weak performance. Improvement that happened ONLY because the "
-        "examiner walked the student there step by step is NOT evidence of independent understanding.\n"
-        "- Hedging or guessing that happens to land near a correct idea (\"I think\", \"maybe\", "
-        "\"I'm not sure\", \"I can't remember the equation\") is NOT mastery and caps the score in "
-        "the lower-middle bands.\n"
-        "- Inability to recall or apply the governing fundamentals (e.g. the relevant equation or "
-        "balanced reaction), even if the student eventually stumbles toward them after prompting, "
-        "caps the score at 4 or below.\n"
-        "- Reward intellectual honesty and self-correction, but only as a tie-breaker.\n"
-        "- Penalize persistent, uncorrected misconceptions.\n"
-        "- Do not penalize a student for asking clarifying questions about the question itself.\n\n"
-        "SCORING GUIDE (use the whole range; most students are not 9-10):\n"
-        "- 9-10: Exceptional. Independently accurate and precise throughout, strong reasoning, correct "
-        "terminology, real depth; little or no prompting needed.\n"
-        "- 7-8: Strong. Mostly accurate and largely independent; correct core reasoning with only minor "
-        "gaps or imprecision.\n"
-        "- 5-6: Partial. Grasps the basic idea and some correct elements, but with real gaps, vagueness, "
-        "or an error, and needed noticeable prompting; little depth.\n"
-        "- 3-4: Weak. Major gaps or misconceptions; could not recall or apply the governing fundamentals "
-        "even with prompting; only fragmentary correct pieces, often via guessing.\n"
-        "- 1-2: No meaningful understanding or engagement.\n\n"
-        "Respond in valid JSON with exactly these four keys:\n"
-        '- "Score" (integer 1-10)\n'
-        '- "Feedback" (string, 2-3 sentences: what they did well, what they struggled with, overall assessment)\n'
-        '- "Misconceptions_Flagged" (boolean: true ONLY if the student actually expressed an '
-        "incorrect belief that went uncorrected by the end — NOT for gaps, vagueness, "
-        '"I don\'t know", or an incomplete-but-not-wrong answer)\n'
-        '- "Trajectory" (string, one of: "improving", "consistent_strong", "consistent_weak", "declining", "mixed")\n\n'
-        "Respond with ONLY the JSON object, no additional text."
-    )
-    response = client.chat.completions.create(
-        model="gpt-5.1",
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"TRANSCRIPT:\n\n{transcript}"},
-        ],
-        timeout=60.0,
-    )
-    return json.loads(response.choices[0].message.content)
-
-
-def annotate_transcript(client, conversation: list, topic: str, evaluation: dict) -> list:
-    """Return per-student-turn quality annotations for the post-exam review."""
-    student_turns = [t for t in conversation if t["role"] == "student"]
-    if not student_turns:
-        return []
     lines = []
     for turn in conversation:
         label = "Examiner" if turn["role"] == "examiner" else "Student"
@@ -782,9 +728,20 @@ def annotate_transcript(client, conversation: list, topic: str, evaluation: dict
         f"You are reviewing a chemistry oral exam transcript. Topic: {topic}. "
         f"Overall score: {evaluation.get('Score', '?')}/10.\n\n"
         f"Assess each of the {len(student_turns)} student responses.\n"
-        "Return JSON: "
-        '{"annotations": [{"exchange": 1, "quality": "strong|partial|weak|misconception", "note": "one specific sentence"}]}\n'
-        f"Return exactly {len(student_turns)} annotations. ONLY the JSON object."
+        "Also classify every examiner turn that follows a student response, excluding "
+        "the deterministic closing line, as exactly one of:\n"
+        '- "probe": asks the student to deepen or apply their own reasoning without help;\n'
+        '- "correction": identifies an error but does not disclose a missing fundamental;\n'
+        '- "hint": narrows or redirects the question with a small directional cue;\n'
+        '- "supplied_fundamental": gives away a balanced equation, mole ratio, numerical '
+        "constant, missing calculation step, definition, or mechanism.\n\n"
+        "Return JSON with this shape: "
+        '{"student_annotations": [{"exchange": 1, "quality": '
+        '"strong|partial|weak|misconception", "note": "one specific sentence"}], '
+        '"examiner_scaffolding": [{"examiner_turn": 2, "type": '
+        '"probe|correction|hint|supplied_fundamental"}]}\n'
+        f"Return exactly {len(student_turns)} student_annotations and classify every "
+        "eligible examiner follow-up. ONLY the JSON object."
     )
     try:
         response = client.chat.completions.create(
@@ -797,13 +754,59 @@ def annotate_transcript(client, conversation: list, topic: str, evaluation: dict
             timeout=30.0,
         )
         result = json.loads(response.choices[0].message.content)
-        return result.get("annotations", [])
+        examiner_scaffolding = result.get("examiner_scaffolding", [])
+        return {
+            "student_annotations": result.get("student_annotations", []),
+            "examiner_scaffolding": examiner_scaffolding,
+            "scaffolding_counts": count_scaffolding(examiner_scaffolding),
+        }
     except Exception:
-        return []
+        return {
+            "student_annotations": [],
+            "examiner_scaffolding": [],
+            "scaffolding_counts": empty_scaffolding_counts(),
+        }
 
 
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="ChemViva", layout="wide")
+def verify_grader_feedback(
+    client, conversation: list, topic: str, evaluation: dict
+) -> dict:
+    """Flag incorrect or contested chemistry claims for instructor review."""
+    transcript = "\n\n".join(
+        f"[{'Examiner' if turn['role'] == 'examiner' else 'Student'}]: {turn['content']}"
+        for turn in conversation
+    )
+    system_prompt = (
+        "You are independently checking chemistry claims in feedback from another "
+        "grader. Decide only whether the FEEDBACK contains a chemistry claim that is "
+        "incorrect, misleading, convention-dependent, or reasonably contested. Do not "
+        "re-grade the student and do not flag tone or scoring disagreements. Return JSON "
+        'with exactly {"flagged": boolean, "note": "short instructor-facing reason or '
+        'empty string"}.'
+    )
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"TOPIC: {topic}\n\nTRANSCRIPT:\n{transcript}\n\n"
+                    f"FEEDBACK:\n{evaluation.get('Feedback', '')}"
+                ),
+            },
+        ],
+        timeout=30.0,
+    )
+    result = json.loads(response.choices[0].message.content)
+    return {
+        "flagged": bool(result.get("flagged", False)),
+        "note": str(result.get("note", "")).strip(),
+    }
+
+
+# ── Page header ───────────────────────────────────────────────────────────────
 st.markdown("""
 <div style='text-align:center; padding: 0.5rem 0 1.2rem 0;'>
   <span style='font-size:3em; font-weight:900; letter-spacing:-1px;
@@ -823,7 +826,9 @@ with st.sidebar:
     if st.button("New Question"):
         for key in ["question", "exam_state", "conversation", "exchange_count",
                     "answer_method", "evaluation", "sheet_logged", "resolved_topic",
-                    "improvement_advice", "turn_annotations"]:
+                    "improvement_advice", "turn_annotations", "turn_in_flight",
+                    "processed_turn_keys", "completion_status",
+                    "feedback_verification"]:
             st.session_state.pop(key, None)
         st.session_state["question_requested"] = True
         st.session_state["attempt_counter"] = st.session_state.get("attempt_counter", 0) + 1
@@ -859,7 +864,9 @@ settings_changed = st.session_state.get("active_topic") != selected_topic
 if settings_changed:
     for key in ["question", "exam_state", "conversation", "exchange_count",
                 "answer_method", "evaluation", "sheet_logged", "question_requested",
-                "resolved_topic", "improvement_advice", "turn_annotations"]:
+                "resolved_topic", "improvement_advice", "turn_annotations",
+                "turn_in_flight", "processed_turn_keys", "completion_status",
+                "feedback_verification"]:
         st.session_state.pop(key, None)
     was_initialized = st.session_state.get("active_topic") is not None
     st.session_state["active_topic"] = selected_topic
@@ -926,43 +933,15 @@ def _get_question_structures(question_text: str) -> list[dict]:
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
 
-def _transcribe_audio(audio_bytes) -> str | None:
-    """Transcribe audio bytes via AssemblyAI. Returns text or None on failure."""
-    temp_audio_path = "temp_audio.wav"
-    try:
-        with open(temp_audio_path, "wb") as f:
-            f.write(audio_bytes.getbuffer())
-        transcriber = aai.Transcriber()
-        result = transcriber.transcribe(
-            temp_audio_path,
-            config=aai.TranscriptionConfig(
-                language_code="en",
-                speech_models=["universal-2"],
-                entity_detection=True,
-            ),
-        )
-        return result.text
-    except Exception as e:
-        st.error(f"❌ Transcription failed: {str(e)}")
-        return None
-    finally:
-        if os.path.exists(temp_audio_path):
-            try:
-                os.remove(temp_audio_path)
-            except Exception:
-                pass
-
-
-def _render_conversation(conversation: list, answer_method: str):
+def _render_conversation(conversation: list):
     """Render the full conversation thread as chat bubbles."""
     for turn in conversation:
         if turn["role"] == "examiner":
             with st.chat_message("assistant", avatar="🎓"):
-                st.write(turn["content"])
+                st.markdown(normalize_math_delimiters(turn["content"]))
         else:
-            avatar = "🎤" if answer_method == "audio" else "✍️"
-            with st.chat_message("user", avatar=avatar):
-                st.write(turn["content"])
+            with st.chat_message("user", avatar="✍️"):
+                st.markdown(normalize_math_delimiters(turn["content"]))
 
 
 def _render_annotated_transcript(conversation: list, annotations: list):
@@ -978,11 +957,11 @@ def _render_annotated_transcript(conversation: list, annotations: list):
     for turn in conversation:
         if turn["role"] == "examiner":
             with st.chat_message("assistant", avatar="🎓"):
-                st.write(turn["content"])
+                st.markdown(normalize_math_delimiters(turn["content"]))
         else:
             student_turn += 1
             with st.chat_message("user", avatar="✍️"):
-                st.write(turn["content"])
+                st.markdown(normalize_math_delimiters(turn["content"]))
                 ann = ann_map.get(student_turn)
                 if ann:
                     quality = ann.get("quality", "")
@@ -1036,8 +1015,11 @@ if exam_state == "not_started":
     )
 
     if st.button("Begin Exam", type="primary", key=f"begin_{attempt}"):
-        st.session_state["answer_method"] = "typed"
-        st.session_state["conversation"] = [{"role": "examiner", "content": question}]
+        st.session_state["answer_method"] = ANSWER_METHOD
+        st.session_state["conversation"] = [{
+            "role": "examiner",
+            "content": normalize_math_delimiters(question),
+        }]
         st.session_state["exchange_count"] = 0
         st.session_state["exam_state"] = "in_progress"
         st.rerun()
@@ -1046,7 +1028,7 @@ if exam_state == "not_started":
 elif exam_state == "in_progress":
     conversation   = st.session_state["conversation"]
     exchange_count = st.session_state["exchange_count"]
-    answer_method  = st.session_state["answer_method"]
+    normalize_conversation(conversation)
 
     st.progress(
         exchange_count / MAX_EXCHANGES,
@@ -1063,29 +1045,30 @@ elif exam_state == "in_progress":
                 with col:
                     st.image(s["image_bytes"], caption=s["name"].capitalize())
 
-    _render_conversation(conversation, answer_method)
+    _render_conversation(conversation)
 
+    turn_key = (attempt, exchange_count)
+    turn_is_in_flight = st.session_state.get("turn_in_flight") is not None
     transcript_text = None
-
-    if answer_method == "audio":
-        audio_bytes = st.audio_input(
-            "Record your response:", key=f"audio_{attempt}_{exchange_count}"
-        )
-        if audio_bytes:
-            with st.spinner("Transcribing audio..."):
-                transcript_text = _transcribe_audio(audio_bytes)
-    else:
-        typed = st.text_area(
-            "Your response:",
-            height=150,
-            placeholder="Type your response to the examiner's question...",
-            key=f"typed_{attempt}_{exchange_count}",
-        )
-        if st.button("Submit", key=f"submit_{attempt}_{exchange_count}"):
-            if not typed.strip():
-                st.error("Please write a response before submitting.")
-            else:
-                transcript_text = typed.strip()
+    turn_claimed = False
+    typed = st.text_area(
+        "Your response:",
+        height=150,
+        placeholder="Type your response to the examiner's question...",
+        key=f"typed_{attempt}_{exchange_count}",
+        disabled=turn_is_in_flight,
+    )
+    if st.button(
+        "Submit",
+        key=f"submit_{attempt}_{exchange_count}",
+        disabled=turn_is_in_flight,
+    ):
+        if not typed.strip():
+            st.error("Please write a response before submitting.")
+        else:
+            turn_claimed = claim_turn(st.session_state, turn_key)
+            if turn_claimed:
+                transcript_text = normalize_math_delimiters(typed.strip())
 
     # ── Manual early exit (secondary to Submit) ───────────────────────────────
     # Lets a student finish on their own terms so they are never trapped — e.g.
@@ -1102,14 +1085,24 @@ elif exam_state == "in_progress":
         if st.button(
             "End exam and grade",
             key=f"end_now_{attempt}_{exchange_count}",
-            disabled=not confirm_end,
+            disabled=not confirm_end or turn_is_in_flight,
         ):
             with st.spinner("Evaluating your performance so far..."):
                 try:
+                    completed_conversation = [dict(turn) for turn in conversation]
+                    append_closing_turn(completed_conversation)
                     evaluation = grade_conversation(
-                        client, conversation, resolved_topic, question
+                        client, completed_conversation, resolved_topic, question
                     )
+                    metrics = completion_metrics(
+                        completed_conversation,
+                        exchange_count,
+                        MAX_EXCHANGES,
+                        ended_early=True,
+                    )
+                    st.session_state["conversation"] = completed_conversation
                     st.session_state["evaluation"] = evaluation
+                    st.session_state["completion_status"] = metrics["completion_status"]
                     st.session_state["exam_state"] = "complete"
                     st.rerun()
                 except json.JSONDecodeError as e:
@@ -1117,58 +1110,66 @@ elif exam_state == "in_progress":
                 except Exception as e:
                     st.error(f"❌ Evaluation failed: {str(e)}")
 
-    if transcript_text:
-        conversation.append({"role": "student", "content": transcript_text})
-        new_count = exchange_count + 1
-
-        if new_count >= MAX_EXCHANGES:
-            # Final turn: close deterministically instead of asking the model for a
-            # closing line. The examiner model tended to ask another (unanswerable)
-            # question here rather than wrap up, so we append a fixed close and grade.
-            conversation.append({
-                "role": "examiner",
-                "content": (
-                    "Thank you — that brings us to the end of the examination. "
-                    "I appreciate your responses; your results are being prepared now."
-                ),
-            })
-        else:
-            with st.spinner("Examiner is thinking..."):
-                try:
-                    follow_up = get_examiner_response(
-                        client, conversation, new_count,
-                        TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
-                        question,
-                    )
-                    conversation.append({"role": "examiner", "content": follow_up})
-                except Exception as e:
-                    st.error(f"❌ Failed to get examiner response: {str(e)}")
-                    st.stop()
-
-        st.session_state["conversation"] = conversation
-        st.session_state["exchange_count"] = new_count
-
-        if new_count >= MAX_EXCHANGES:
-            # All exchanges done — grade the full conversation immediately
-            with st.spinner("Evaluating your performance across all exchanges..."):
-                try:
-                    evaluation = grade_conversation(
-                        client, conversation, resolved_topic, question
-                    )
+    if transcript_text and turn_claimed:
+        turn_succeeded = False
+        try:
+            # Work on a copy and commit only after both alternating turns exist.
+            # A failed model call therefore never leaves a phantom student turn.
+            updated_conversation = [dict(turn) for turn in conversation]
+            student_added = append_turn_if_expected(
+                updated_conversation, "student", transcript_text
+            )
+            if not student_added:
+                # A competing handler already advanced the exchange. Drop this
+                # stale click without appending or grading it a second time.
+                turn_succeeded = True
+            else:
+                new_count = exchange_count + 1
+                if new_count >= MAX_EXCHANGES:
+                    append_closing_turn(updated_conversation)
+                    with st.spinner(
+                        "Evaluating your performance across all exchanges..."
+                    ):
+                        evaluation = grade_conversation(
+                            client, updated_conversation, resolved_topic, question
+                        )
                     st.session_state["evaluation"] = evaluation
+                    st.session_state["completion_status"] = "complete"
                     st.session_state["exam_state"] = "complete"
-                except json.JSONDecodeError as e:
-                    st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
-                except Exception as e:
-                    st.error(f"❌ Evaluation failed: {str(e)}")
+                else:
+                    with st.spinner("Examiner is thinking..."):
+                        follow_up = get_examiner_response(
+                            client,
+                            updated_conversation,
+                            new_count,
+                            TOPIC_INSTRUCTIONS.get(resolved_topic, resolved_topic),
+                            question,
+                        )
+                    if not append_turn_if_expected(
+                        updated_conversation, "examiner", follow_up
+                    ):
+                        raise RuntimeError(
+                            "Examiner response was dropped because turn order changed."
+                        )
 
-        st.rerun()
+                st.session_state["conversation"] = updated_conversation
+                st.session_state["exchange_count"] = new_count
+                turn_succeeded = True
+        except json.JSONDecodeError as e:
+            st.error(f"❌ Invalid JSON from evaluator: {str(e)}")
+        except Exception as e:
+            st.error(f"❌ Failed to process this response: {str(e)}")
+        finally:
+            release_turn(st.session_state, turn_key, succeeded=turn_succeeded)
+
+        if turn_succeeded:
+            st.rerun()
 
 # ── State: complete ───────────────────────────────────────────────────────────
 elif exam_state == "complete":
-    conversation  = st.session_state["conversation"]
-    evaluation    = st.session_state["evaluation"]
-    answer_method = st.session_state["answer_method"]
+    conversation = st.session_state["conversation"]
+    evaluation = st.session_state["evaluation"]
+    normalize_conversation(conversation)
 
     if "turn_annotations" not in st.session_state:
         with st.spinner("Reviewing your responses..."):
@@ -1176,11 +1177,15 @@ elif exam_state == "complete":
                 client, conversation, resolved_topic, evaluation
             )
 
-    annotations = st.session_state.get("turn_annotations", [])
+    transcript_review = st.session_state.get("turn_annotations", {})
+    annotations = transcript_review.get("student_annotations", [])
+    scaffolding_counts = transcript_review.get(
+        "scaffolding_counts", empty_scaffolding_counts()
+    )
     if annotations:
         _render_annotated_transcript(conversation, annotations)
     else:
-        _render_conversation(conversation, answer_method)
+        _render_conversation(conversation)
 
     st.divider()
     st.subheader("Examination Complete")
@@ -1192,6 +1197,25 @@ elif exam_state == "complete":
 
     st.subheader("Feedback")
     st.info(feedback)
+
+    if "feedback_verification" not in st.session_state:
+        if CONFIG.get("verify_grader_feedback", False):
+            with st.spinner("Checking feedback chemistry for instructor review..."):
+                try:
+                    st.session_state["feedback_verification"] = verify_grader_feedback(
+                        client, conversation, resolved_topic, evaluation
+                    )
+                except Exception as e:
+                    LOGGER.warning("Feedback verification failed: %s", e)
+                    st.session_state["feedback_verification"] = {
+                        "flagged": False,
+                        "note": f"Verification unavailable: {e}",
+                    }
+        else:
+            st.session_state["feedback_verification"] = {
+                "flagged": False,
+                "note": "",
+            }
 
     # Generate and display personalized improvement recommendations
     if "improvement_advice" not in st.session_state:
@@ -1209,23 +1233,51 @@ elif exam_state == "complete":
 
     # ── Google Sheets logging (once per completed exam) ───────────────────────
     if not st.session_state.get("sheet_logged"):
+        exchanges_completed = st.session_state.get(
+            "exchange_count",
+            sum(turn["role"] == "student" for turn in conversation),
+        )
+        completion = completion_metrics(
+            conversation,
+            exchanges_completed,
+            MAX_EXCHANGES,
+            ended_early=st.session_state.get("completion_status") != "complete",
+        )
+        score_to_log = score
+        if (
+            completion["completion_status"] == "abandoned"
+            and not CONFIG.get("score_abandoned_sessions", False)
+        ):
+            score_to_log = ""
         formatted_transcript = "\n\n".join(
             f"[{'Examiner' if t['role'] == 'examiner' else 'Student'}]: {t['content']}"
             for t in conversation
         )
-        answer_method_logged = f"dialogue-{answer_method}"
-        append_to_sheet([
-            exam_timestamp,
-            student_name,
-            student_id,
-            selected_topic,
-            resolved_topic,
-            question,
-            answer_method_logged,
-            formatted_transcript,
-            score,
-            feedback,
-            str(misconceptions),
-            trajectory,
-        ])
+        feedback_verification = st.session_state["feedback_verification"]
+        append_to_sheet({
+            "timestamp": exam_timestamp,
+            "student_name": student_name,
+            "student_id": student_id,
+            "topic": selected_topic,
+            "subtopic": resolved_topic,
+            "question": normalize_math_delimiters(question),
+            "answer_method": f"dialogue-{ANSWER_METHOD}",
+            "transcript": formatted_transcript,
+            "score": score_to_log,
+            "feedback": feedback,
+            "misconceptions_flagged": str(misconceptions),
+            "trajectory": trajectory,
+            **completion,
+            "scaffolding_probe_count": scaffolding_counts["probe"],
+            "scaffolding_correction_count": scaffolding_counts["correction"],
+            "scaffolding_hint_count": scaffolding_counts["hint"],
+            "scaffolding_supplied_fundamental_count": scaffolding_counts[
+                "supplied_fundamental"
+            ],
+            "feedback_flagged_for_review": str(
+                feedback_verification.get("flagged", False)
+            ),
+            "feedback_review_note": feedback_verification.get("note", ""),
+            "schema_version": SCHEMA_VERSION,
+        })
         st.session_state["sheet_logged"] = True

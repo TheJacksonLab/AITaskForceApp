@@ -11,6 +11,10 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
+from chemviva_core import SHEET_COLUMNS
+
+st.set_page_config(page_title="ChemViva — Instructor Dashboard", layout="wide")
+
 
 # ── Secret helpers ────────────────────────────────────────────────────────────
 def _get_secret(key: str):
@@ -24,15 +28,7 @@ INSTRUCTOR_PASSWORD = _get_secret("INSTRUCTOR_PASSWORD") or ""
 GOOGLE_CREDS_STR    = _get_secret("GOOGLE_SHEETS_CREDENTIALS") or ""
 GOOGLE_SHEET_NAME   = _get_secret("GOOGLE_SHEET_NAME") or "ChemViva_OralExam_Submissions"
 
-SHEET_COLUMNS = [
-    "timestamp", "student_name", "student_id", "topic", "style",
-    "question", "answer_method", "transcript", "score",
-    "feedback", "misconceptions_flagged", "trajectory",
-]
-
-
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="ChemViva — Instructor Dashboard", layout="wide")
+# ── Page header ───────────────────────────────────────────────────────────────
 st.markdown("""
 <div style='text-align:center; padding: 0.5rem 0 1.2rem 0;'>
   <span style='font-size:2.5em; font-weight:900; letter-spacing:-1px;
@@ -86,13 +82,21 @@ def load_sheet_data() -> pd.DataFrame:
     records = sh.sheet1.get_all_records()
 
     if not records:
-        return pd.DataFrame(columns=SHEET_COLUMNS)
+        return pd.DataFrame(columns=list(SHEET_COLUMNS))
 
     df = pd.DataFrame(records)
+    for column in SHEET_COLUMNS:
+        if column not in df.columns:
+            df[column] = ""
     df["score"] = pd.to_numeric(df["score"], errors="coerce")
     df["misconceptions_flagged"] = df["misconceptions_flagged"].apply(
         lambda v: str(v).strip().lower() in ("true", "1", "yes")
     )
+    df["feedback_flagged_for_review"] = df[
+        "feedback_flagged_for_review"
+    ].apply(lambda v: str(v).strip().lower() in ("true", "1", "yes"))
+    for column in ("student_turns", "exchanges_completed"):
+        df[column] = pd.to_numeric(df[column], errors="coerce")
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
     return df
 
@@ -169,8 +173,9 @@ with col4:
 st.subheader("All Submissions")
 st.dataframe(
     filtered_df[[
-        "timestamp", "student_name", "student_id", "topic", "style",
-        "answer_method", "score", "misconceptions_flagged", "feedback",
+        "timestamp", "student_name", "student_id", "topic", "subtopic",
+        "answer_method", "completion_status", "student_turns", "score",
+        "misconceptions_flagged", "feedback_flagged_for_review", "feedback",
     ]],
     use_container_width=True,
 )

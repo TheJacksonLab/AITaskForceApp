@@ -1,5 +1,7 @@
 {
   "max_exchanges": 6,
+  "score_abandoned_sessions": false,
+  "verify_grader_feedback": false,
   "course_name": "CHEM 202",
   "enabled_topics": [
     "Stoichiometry",
